@@ -29,6 +29,13 @@ static void launch(void)
 
 void P1ContextInit(void)
 {
+    int i;
+    for (i=0; i<P1_MAXPROC; i++) {
+        USLOSS_Context my_context;
+        contexts[i].context = my_context;
+        contexts[i].startFunc = 0;
+        contexts[i].startArg = 0;
+    }
     // initialize contexts
 }
 
