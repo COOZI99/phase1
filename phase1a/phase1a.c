@@ -3,9 +3,11 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <stdio.h>
+#include <string.h>
 
 extern  USLOSS_PTE  *P3_AllocatePageTable(int cid);
 extern  void        P3_FreePageTable(int cid);
+static  void        illegalMessage(int n,void *arg);
 
 typedef struct Context {
     void            (*startFunc)(void *);
@@ -29,14 +31,21 @@ static void launch(void)
 
 void P1ContextInit(void)
 {
-    int i;
-    for (i=0; i<P1_MAXPROC; i++) {
-        USLOSS_Context my_context;
-        contexts[i].context = my_context;
-        contexts[i].startFunc = 0;
-        contexts[i].startArg = 0;
+    // Checking if we are in kernal mode
+    if(USLOSS_PsrGet() && 0x1  == 1){
+        USLOSS_IllegalInstruction();
     }
-    // initialize contexts
+    // Setting memory to 0
+    memset(contexts,0,sizeof(contexts));
+    // Clearing memory
+
+    // Calling illegal message and exiting program
+    USLOSS_IntVec[USLOSS_ILLEGAL_INT] = illegalMessage;
+}
+
+static void illegalMessage(int n, void *arg){
+    USLOSS_Console("Error: Not in Kernel mode");
+    USLOSS_Halt(0);
 }
 
 int P1ContextCreate(void (*func)(void *), void *arg, int stacksize, int *cid) {
@@ -54,7 +63,7 @@ int P1ContextSwitch(int cid) {
 
 int P1ContextFree(int cid) {
     int result = P1_SUCCESS;
-    // free the stack and mark the context as unused
+    
     return result;
 }
 
