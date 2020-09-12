@@ -32,7 +32,7 @@ static void launch(void)
 void P1ContextInit(void)
 {
     // Checking if we are in kernal mode
-    if(USLOSS_PsrGet() && 0x1  == 1){
+    if(USLOSS_PsrGet() & 0x1  == 1){
         USLOSS_IllegalInstruction();
     }
     // Setting memory to 0
@@ -50,6 +50,10 @@ static void illegalMessage(int n, void *arg){
 
 int P1ContextCreate(void (*func)(void *), void *arg, int stacksize, int *cid) {
     int result = P1_SUCCESS;
+    if (stacksize < USLOSS_MIN_STACK) {
+        return P1_INVALID_STACK;
+    }
+    
     // find a free context and initialize it
     // allocate the stack, specify the startFunc, etc.
     return result;
