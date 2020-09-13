@@ -8,12 +8,14 @@ extern  USLOSS_PTE  *P3_AllocatePageTable(int cid);
 extern  void        P3_FreePageTable(int cid);
 extern  void        *memset(void *str, int c, size_t n);
 extern  int         memcmp(const void *str1, const void *str2, size_t n);
+extern  void        *realloc(void *ptr, size_t size);
 
 typedef struct Context {
     void            (*startFunc)(void *);
     void            *startArg;
     USLOSS_Context  context;
     // you'll need more stuff here
+    char *stack;
 } Context;
 
 static Context   contexts[P1_MAXPROC];
@@ -44,41 +46,35 @@ void P1ContextInit(void)
     // USLOSS_IntVec[USLOSS_ILLEGAL_INT] = illegalMessage;
 }
 
-char stack[USLOSS_MIN_STACK];
-
 int P1ContextCreate(void (*func)(void *), void *arg, int stacksize, int *cid) {
-    int result = P1_SUCCESS;
+    // find a free context and initialize it
+    // allocate the stack, specify the startFunc, etc.
     if (stacksize < USLOSS_MIN_STACK) {
         return P1_INVALID_STACK;
     }
-    USLOSS_Console("Stack is Valid\n");
     int i;
-    
     for (i=0; i<P1_MAXPROC; i++) {
         unsigned char val = 0;
-        USLOSS_Console("Checking for Valid Memory\n");
         if (memcmp(&contexts[i], &val, 1) == 0) {
             USLOSS_Console("Found Valid Memory at %d\n", i);
             contexts[i].startFunc = func;
             contexts[i].startArg = arg;
-            // char stack[stacksize];
-            USLOSS_ContextInit(&contexts[i].context, stack, USLOSS_MIN_STACK, P3_AllocatePageTable(i), launch);
-            USLOSS_Console("Init Context\n");
-            USLOSS_Console("Setting cid\n");
+            contexts[i].stack = (char *)realloc(contexts[i].stack, stacksize);
+            USLOSS_ContextInit(
+                /* *context= */  &contexts[i].context,
+                /* *stack= */     contexts[i].stack,
+                /* stackSize= */  USLOSS_MIN_STACK,
+                /* *pageTable= */ P3_AllocatePageTable(i),
+                /* (*func)= */    launch);
             *cid = i;
-            break;
+            return P1_SUCCESS;
         }
-        USLOSS_Console("No free mem found");
     }
-    if (i == P1_MAXPROC) {
-        return P1_TOO_MANY_CONTEXTS;
-    }
-    // find a free context and initialize it
-    // allocate the stack, specify the startFunc, etc.
-    return result;
+    return P1_TOO_MANY_CONTEXTS;
 }
 
 int P1ContextSwitch(int cid) {
+    // switch to the specified context
     USLOSS_Context context0;
     if (currentCid != -1) {
         context0 = contexts[currentCid].context;
@@ -90,12 +86,9 @@ int P1ContextSwitch(int cid) {
     } else {
         return P1_INVALID_CID;
     }
-    int result = P1_SUCCESS;
     currentCid = cid;
-    USLOSS_ContextSwitch(&context0, &context1);
-    
-    // switch to the specified context
-    return result;
+    USLOSS_ContextSwitch(&context0, &context1); 
+    return P1_SUCCESS;
 }
 
 int P1ContextFree(int cid) {

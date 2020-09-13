@@ -15,6 +15,7 @@ void
 startup(int argc, char **argv)
 {
     int cid;
+    
     int rc;
     P1ContextInit();
     rc = P1ContextCreate(Output, "Hello World!\n", USLOSS_MIN_STACK, &cid);
