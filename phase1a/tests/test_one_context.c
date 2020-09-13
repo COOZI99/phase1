@@ -16,9 +16,12 @@ startup(int argc, char **argv)
 {
     int cid;
     int rc;
+    USLOSS_Console("Beginning Init...\n");
     P1ContextInit();
+    USLOSS_Console("Beginning create...\n");
     rc = P1ContextCreate(Output, "Hello World!\n", USLOSS_MIN_STACK, &cid);
     assert(rc == P1_SUCCESS);
+    USLOSS_Console("Beginning switch...");
     rc = P1ContextSwitch(cid);
     // should not return
     assert(rc == P1_SUCCESS);
