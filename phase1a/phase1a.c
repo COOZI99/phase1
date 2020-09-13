@@ -25,6 +25,7 @@ static int currentCid = -1;
  */
 static void launch(void)
 {
+    USLOSS_Console("launching...\n");
     assert(contexts[currentCid].startFunc != NULL);
     contexts[currentCid].startFunc(contexts[currentCid].startArg);
 }
@@ -43,6 +44,8 @@ void P1ContextInit(void)
     // USLOSS_IntVec[USLOSS_ILLEGAL_INT] = illegalMessage;
 }
 
+char stack[USLOSS_MIN_STACK];
+
 int P1ContextCreate(void (*func)(void *), void *arg, int stacksize, int *cid) {
     int result = P1_SUCCESS;
     if (stacksize < USLOSS_MIN_STACK) {
@@ -50,17 +53,16 @@ int P1ContextCreate(void (*func)(void *), void *arg, int stacksize, int *cid) {
     }
     USLOSS_Console("Stack is Valid\n");
     int i;
+    
     for (i=0; i<P1_MAXPROC; i++) {
         unsigned char val = 0;
         USLOSS_Console("Checking for Valid Memory\n");
         if (memcmp(&contexts[i], &val, 1) == 0) {
             USLOSS_Console("Found Valid Memory at %d\n", i);
-            contexts[i].startFunc = *func;
-            USLOSS_Console("Set function\n");
+            contexts[i].startFunc = func;
             contexts[i].startArg = arg;
-            USLOSS_Console("Set arg\n");
-            char stack[stacksize];
-            USLOSS_ContextInit(&contexts[i].context, stack, stacksize, P3_AllocatePageTable(i), launch);
+            // char stack[stacksize];
+            USLOSS_ContextInit(&contexts[i].context, stack, USLOSS_MIN_STACK, P3_AllocatePageTable(i), launch);
             USLOSS_Console("Init Context\n");
             USLOSS_Console("Setting cid\n");
             *cid = i;
@@ -89,8 +91,9 @@ int P1ContextSwitch(int cid) {
         return P1_INVALID_CID;
     }
     int result = P1_SUCCESS;
-    USLOSS_ContextSwitch(&context0, &context1);
     currentCid = cid;
+    USLOSS_ContextSwitch(&context0, &context1);
+    
     // switch to the specified context
     return result;
 }

@@ -14,13 +14,17 @@ Output(void *arg)
 void
 startup(int argc, char **argv)
 {
-    int cid;
+    int cid1, cid2;
     int rc;
     P1ContextInit();
-    rc = P1ContextCreate(Output, "Hello World!\n", USLOSS_MIN_STACK, &cid);
+    rc = P1ContextCreate(Output, "Hello World!\n", USLOSS_MIN_STACK, &cid1);
     assert(rc == P1_SUCCESS);
-    rc = P1ContextSwitch(cid);
+    rc = P1ContextCreate(Output, "Goodbye.\n", USLOSS_MIN_STACK+1, &cid2);
+
+    rc = P1ContextSwitch(cid1);
     // should not return
+    assert(rc == P1_SUCCESS);
+    rc = P1ContextSwitch(cid2);
     assert(rc == P1_SUCCESS);
     assert(0);
 }
