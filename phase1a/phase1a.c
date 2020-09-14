@@ -106,7 +106,7 @@ int P1ContextFree(int cid) {
     int result = P1_SUCCESS;
     if (-1 >= cid || cid >= P1_MAXPROC) {
         result = P1_INVALID_CID;
-    } else if(contexts[cid].isBusy){
+    } else if(contexts[cid].wasCreated){
         result = P1_CONTEXT_IN_USE;
     }else{
         free(contexts[cid].stack);
