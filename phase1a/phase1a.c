@@ -105,7 +105,14 @@ int P1ContextSwitch(int cid) {
 
 int P1ContextFree(int cid) {
     int result = P1_SUCCESS;
-    
+    if (-1 >= cid || cid >= P1_MAXPROC) {
+        result = P1_INVALID_CID;
+    } else if(contexts[cid].isBusy){
+        result = P1_CONTEXT_IN_USE;
+    }else{
+        free(contexts[cid].stack);
+        P3_FreePageTable(cid);
+    }
     return result;
 }
 
