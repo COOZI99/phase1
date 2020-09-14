@@ -32,10 +32,16 @@ static void launch(void)
     contexts[currentCid].startFunc(contexts[currentCid].startArg);
 }
 
+static void illegalMessage(int n, void *arg){
+    USLOSS_Console("Error: Not in Kernel mode\n");
+    USLOSS_Halt(0);
+}
+
 void P1ContextInit(void)
 {
     // Checking if we are in kernal mode
     if(!(USLOSS_PsrGet() & USLOSS_PSR_CURRENT_MODE)){
+        USLOSS_IntVec[USLOSS_ILLEGAL_INT] = illegalMessage;
         USLOSS_IllegalInstruction();
     }
     // Setting memory to 0
@@ -93,7 +99,16 @@ int P1ContextSwitch(int cid) {
 
 int P1ContextFree(int cid) {
     int result = P1_SUCCESS;
-    // free the stack and mark the context as unused
+    
+    // checking if the cid is valid
+    // if(cid > currentCid){
+    //     result = P1_INVALID_CID;
+    // }
+    // // checking if the cid is currently running
+    // if(contexts[cid] != NULL){
+    //     result = P1_CONTEXT_IN_USE;
+    // }
+    // contexts[cid].context.pageTable = P3_FreePageTable;
     return result;
 }
 
@@ -102,6 +117,18 @@ void
 P1EnableInterrupts(void) 
 {
     // set the interrupt bit in the PSR
+    int bits = USLOSS_PsrGet();
+
+    // checking if it is in kernal mode
+    if((bits & 0x1)  == 0){
+        USLOSS_IllegalInstruction();
+        USLOSS_IntVec[USLOSS_ILLEGAL_INT] = illegalMessage;
+    }
+
+    if((bits & 0x2) == 0){
+        int val = USLOSS_PsrSet(USLOSS_PsrGet() | 0x2);
+        assert(val == USLOSS_DEV_OK);
+    }
 }
 
 /*
@@ -113,5 +140,19 @@ P1DisableInterrupts(void)
     int enabled = FALSE;
     // set enabled to TRUE if interrupts are already enabled
     // clear the interrupt bit in the PSR
+    int bits = USLOSS_PsrGet();
+
+    // checking if it is in kernel mode
+    if((bits & 0x1)  == 0){
+        USLOSS_IllegalInstruction();
+    }
+
+    if((bits & 0x2)  == 0x2) {
+        int mode = bits & 0xfd;
+
+        int val = USLOSS_PsrSet(mode);
+        assert(val == USLOSS_DEV_OK);
+        enabled = TRUE;
+    }
     return enabled;
 }
