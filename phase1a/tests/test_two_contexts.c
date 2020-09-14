@@ -9,7 +9,6 @@ static int cids[2];
 void
 Hello(void *arg) 
 {
-
     USLOSS_Console("Hello ");
     int rc = P1ContextSwitch(cids[1]);
     assert(rc == P1_SUCCESS);
@@ -35,6 +34,7 @@ startup(int argc, char **argv)
     rc = P1ContextCreate(Hello, NULL, USLOSS_MIN_STACK, &cids[0]);
     assert(rc == P1_SUCCESS);
     rc = P1ContextCreate(World, NULL, USLOSS_MIN_STACK, &cids[1]);
+    USLOSS_Console("%d, %d", cids[0], cids[1]);
     assert(rc == P1_SUCCESS);
     rc = P1ContextSwitch(cids[0]);
     // should not return

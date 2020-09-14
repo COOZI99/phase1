@@ -28,7 +28,6 @@ static int currentCid = -1;
  */
 static void launch(void)
 {
-    // USLOSS_Console("launching...\n");
     assert(contexts[currentCid].startFunc != NULL);
     contexts[currentCid].startFunc(contexts[currentCid].startArg);
 }
@@ -50,7 +49,6 @@ void P1ContextInit(void)
     // Clearing memory
 
     // Calling illegal message and exiting program
-    // USLOSS_IntVec[USLOSS_ILLEGAL_INT] = illegalMessage;
 }
 
 int P1ContextCreate(void (*func)(void *), void *arg, int stacksize, int *cid) {
@@ -61,12 +59,12 @@ int P1ContextCreate(void (*func)(void *), void *arg, int stacksize, int *cid) {
     }
     int i;
     for (i=0; i<P1_MAXPROC; i++) {
-        if (!contexts[i].wasCreated) {
+        if (contexts[i].wasCreated == 0) {
             USLOSS_Console("Found Valid Memory at %d\n", i);
             contexts[i].startFunc = func;
             contexts[i].startArg = arg;
             contexts[i].wasCreated = 1;
-            contexts[i].stack = (char *)realloc(contexts[i].stack, stacksize);
+            contexts[i].stack = (char *)malloc(stacksize * sizeof(char));
             
             USLOSS_ContextInit(
                 /* *context= */  &contexts[i].context,
@@ -82,23 +80,22 @@ int P1ContextCreate(void (*func)(void *), void *arg, int stacksize, int *cid) {
 }
 
 int P1ContextSwitch(int cid) {
+    // USLOSS_Console("Calling Switch\n");
     if (cid == currentCid) {
         return P1_SUCCESS; // already there, do nothing.
     }
-    // switch to the specified context
-    USLOSS_Context context0;
-    if (currentCid > -1) {
-        context0 = contexts[currentCid].context;
-    }
 
-    USLOSS_Context context1;
     if (cid <= -1 || P1_MAXPROC <= cid || !contexts[cid].wasCreated) {
         return P1_INVALID_CID;
     }
-    context1 = contexts[cid].context;
-    
+
+    int old = currentCid;
     currentCid = cid;
-    USLOSS_ContextSwitch(&context0, &context1); 
+    if (currentCid > -1) {
+        USLOSS_ContextSwitch(&contexts[old].context, &contexts[cid].context);
+    } else {
+        USLOSS_ContextSwitch(NULL, &contexts[cid].context);
+    }
     return P1_SUCCESS;
 }
 
