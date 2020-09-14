@@ -91,11 +91,19 @@ int P1ContextSwitch(int cid) {
 
     int old = currentCid;
     currentCid = cid;
+<<<<<<< HEAD
     if (currentCid > -1) {
         USLOSS_ContextSwitch(&contexts[old].context, &contexts[cid].context);
     } else {
         USLOSS_ContextSwitch(NULL, &contexts[cid].context);
     }
+=======
+    if(currentCid == -1){
+        USLOSS_ContextSwitch(NULL, &context1);
+    }else{
+        USLOSS_ContextSwitch(&context0, &context1);
+    } 
+>>>>>>> fbcdef18c2356d51d338064ccd17d0ee96a1b0af
     return P1_SUCCESS;
 }
 
@@ -108,6 +116,7 @@ int P1ContextFree(int cid) {
     }else{
         free(contexts[cid].stack);
         P3_FreePageTable(cid);
+        contexts[cid].wasCreated = 0;
     }
     return result;
 }
