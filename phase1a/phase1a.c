@@ -13,6 +13,7 @@ extern  void        *realloc(void *ptr, size_t size);
 typedef struct Context {
     void            (*startFunc)(void *);
     void            *startArg;
+    int isBusy;
     USLOSS_Context  context;
     // you'll need more stuff here
     char *stack;
@@ -27,12 +28,12 @@ static int currentCid = -1;
  */
 static void launch(void)
 {
-    USLOSS_Console("launching...\n");
+    // USLOSS_Console("launching...\n");
     assert(contexts[currentCid].startFunc != NULL);
     contexts[currentCid].startFunc(contexts[currentCid].startArg);
 }
 
-static void illegalMessage(int n, void *arg){
+static void IllegalMessage(int n, void *arg){
     USLOSS_Console("Error: Not in Kernel mode\n");
     USLOSS_Halt(0);
 }
@@ -41,7 +42,7 @@ void P1ContextInit(void)
 {
     // Checking if we are in kernal mode
     if(!(USLOSS_PsrGet() & USLOSS_PSR_CURRENT_MODE)){
-        USLOSS_IntVec[USLOSS_ILLEGAL_INT] = illegalMessage;
+        USLOSS_IntVec[USLOSS_ILLEGAL_INT] = IllegalMessage;
         USLOSS_IllegalInstruction();
     }
     // Setting memory to 0
@@ -60,12 +61,13 @@ int P1ContextCreate(void (*func)(void *), void *arg, int stacksize, int *cid) {
     }
     int i;
     for (i=0; i<P1_MAXPROC; i++) {
-        unsigned char val = 0;
-        if (memcmp(&contexts[i], &val, 1) == 0) {
+        if (!contexts[i].isBusy) {
             USLOSS_Console("Found Valid Memory at %d\n", i);
             contexts[i].startFunc = func;
             contexts[i].startArg = arg;
+            contexts[i].isBusy = 1;
             contexts[i].stack = (char *)realloc(contexts[i].stack, stacksize);
+            
             USLOSS_ContextInit(
                 /* *context= */  &contexts[i].context,
                 /* *stack= */     contexts[i].stack,
@@ -80,18 +82,22 @@ int P1ContextCreate(void (*func)(void *), void *arg, int stacksize, int *cid) {
 }
 
 int P1ContextSwitch(int cid) {
+    if (cid == currentCid) {
+        return P1_SUCCESS; // already there, do nothing.
+    }
     // switch to the specified context
     USLOSS_Context context0;
-    if (currentCid != -1) {
+    if (currentCid > -1) {
         context0 = contexts[currentCid].context;
     }
+
     USLOSS_Context context1;
-    unsigned char val = 0;
-    if (-1 < cid && cid < P1_MAXPROC && memcmp(&contexts[cid], &val, 1) != 0) {
+    if (-1 < cid && cid < P1_MAXPROC && !contexts[cid].isBusy) {
         context1 = contexts[cid].context;
     } else {
         return P1_INVALID_CID;
     }
+    
     currentCid = cid;
     USLOSS_ContextSwitch(&context0, &context1); 
     return P1_SUCCESS;
@@ -100,15 +106,6 @@ int P1ContextSwitch(int cid) {
 int P1ContextFree(int cid) {
     int result = P1_SUCCESS;
     
-    // checking if the cid is valid
-    // if(cid > currentCid){
-    //     result = P1_INVALID_CID;
-    // }
-    // // checking if the cid is currently running
-    // if(contexts[cid] != NULL){
-    //     result = P1_CONTEXT_IN_USE;
-    // }
-    // contexts[cid].context.pageTable = P3_FreePageTable;
     return result;
 }
 
@@ -120,13 +117,13 @@ P1EnableInterrupts(void)
     int bits = USLOSS_PsrGet();
 
     // checking if it is in kernal mode
-    if((bits & 0x1)  == 0){
+    if(!(bits & USLOSS_PSR_CURRENT_MODE)){
+        USLOSS_IntVec[USLOSS_ILLEGAL_INT] = IllegalMessage;
         USLOSS_IllegalInstruction();
-        USLOSS_IntVec[USLOSS_ILLEGAL_INT] = illegalMessage;
     }
 
-    if((bits & 0x2) == 0){
-        int val = USLOSS_PsrSet(USLOSS_PsrGet() | 0x2);
+    if (!(bits & USLOSS_PSR_CURRENT_INT)) {
+        int val = USLOSS_PsrSet(USLOSS_PsrGet() | USLOSS_PSR_CURRENT_INT);
         assert(val == USLOSS_DEV_OK);
     }
 }
@@ -143,12 +140,14 @@ P1DisableInterrupts(void)
     int bits = USLOSS_PsrGet();
 
     // checking if it is in kernel mode
-    if((bits & 0x1)  == 0){
+    if(!(bits & USLOSS_PSR_CURRENT_MODE)){
+        USLOSS_IntVec[USLOSS_ILLEGAL_INT] = IllegalMessage;
         USLOSS_IllegalInstruction();
     }
 
-    if((bits & 0x2)  == 0x2) {
-        int mode = bits & 0xfd;
+    if(bits & USLOSS_PSR_CURRENT_INT) {
+        int mode = bits & ~(bits & USLOSS_PSR_CURRENT_INT);
+        // int mode = bits & 0xfd;
 
         int val = USLOSS_PsrSet(mode);
         assert(val == USLOSS_DEV_OK);

@@ -1,28 +1,42 @@
 #include <phase1.h>
 #include <phase1Int.h>
 #include <assert.h>
+#include <stdlib.h>
 
-static void
-Output(void *arg) 
+static int cids[2];
+
+
+void
+Hello(void *arg) 
 {
-    char *msg = (char *) arg;
 
-    USLOSS_Console("%s", msg);
+    USLOSS_Console("Hello ");
+    int rc = P1ContextSwitch(cids[1]);
+    assert(rc == P1_SUCCESS);
+    USLOSS_Console("Goodbye.\n");
     USLOSS_Halt(0);
+}
+
+void
+World(void *arg) 
+{
+    USLOSS_Console("World!\n");
+    int rc = P1ContextSwitch(cids[0]);
+    // should not return
+    assert(rc == P1_SUCCESS);
+    assert(0);
 }
 
 void
 startup(int argc, char **argv)
 {
-    int cid1, cid2;
     int rc;
-    USLOSS_Console("Hello\n");
     P1ContextInit();
-    rc = P1ContextCreate(Output, "Hello World!\n", USLOSS_MIN_STACK, &cid1);
+    rc = P1ContextCreate(Hello, NULL, USLOSS_MIN_STACK, &cids[0]);
     assert(rc == P1_SUCCESS);
-    rc = P1ContextCreate(Output, "Goodbye.\n", USLOSS_MIN_STACK+1, &cid2);
-
-    rc = P1ContextSwitch(cid2);
+    rc = P1ContextCreate(World, NULL, USLOSS_MIN_STACK, &cids[1]);
+    assert(rc == P1_SUCCESS);
+    rc = P1ContextSwitch(cids[0]);
     // should not return
     assert(rc == P1_SUCCESS);
     assert(0);

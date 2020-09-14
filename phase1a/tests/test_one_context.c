@@ -20,6 +20,17 @@ startup(int argc, char **argv)
     P1ContextInit();
     rc = P1ContextCreate(Output, "Hello World!\n", USLOSS_MIN_STACK, &cid);
     assert(rc == P1_SUCCESS);
+
+    int invalidCid1 = 48;
+    int invalidCid2 = 50;
+    int invalidCid3 = -2;
+    rc = P1ContextSwitch(invalidCid1);
+    assert(rc == P1_INVALID_CID);
+    rc = P1ContextSwitch(invalidCid2);
+    assert(rc == P1_INVALID_CID);
+    rc = P1ContextSwitch(invalidCid3);
+    assert(rc == P1_INVALID_CID);
+
     rc = P1ContextSwitch(cid);
     // should not return
     assert(rc == P1_SUCCESS);
