@@ -98,7 +98,11 @@ int P1ContextSwitch(int cid) {
     context1 = contexts[cid].context;
     
     currentCid = cid;
-    USLOSS_ContextSwitch(&context0, &context1); 
+    if(currentCid == -1){
+        USLOSS_ContextSwitch(NULL, &context1);
+    }else{
+        USLOSS_ContextSwitch(&context0, &context1);
+    } 
     return P1_SUCCESS;
 }
 
@@ -111,6 +115,7 @@ int P1ContextFree(int cid) {
     }else{
         free(contexts[cid].stack);
         P3_FreePageTable(cid);
+        contexts[cid].wasCreated = 0;
     }
     return result;
 }
