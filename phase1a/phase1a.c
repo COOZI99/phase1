@@ -13,7 +13,7 @@ extern  void        *realloc(void *ptr, size_t size);
 typedef struct Context {
     void            (*startFunc)(void *);
     void            *startArg;
-    int isBusy;
+    int wasCreated;
     USLOSS_Context  context;
     // you'll need more stuff here
     char *stack;
@@ -46,7 +46,7 @@ void P1ContextInit(void)
         USLOSS_IllegalInstruction();
     }
     // Setting memory to 0
-    memset(contexts, 0, sizeof(contexts));
+    memset(contexts, 0, P1_MAXPROC);
     // Clearing memory
 
     // Calling illegal message and exiting program
@@ -61,17 +61,17 @@ int P1ContextCreate(void (*func)(void *), void *arg, int stacksize, int *cid) {
     }
     int i;
     for (i=0; i<P1_MAXPROC; i++) {
-        if (!contexts[i].isBusy) {
+        if (!contexts[i].wasCreated) {
             USLOSS_Console("Found Valid Memory at %d\n", i);
             contexts[i].startFunc = func;
             contexts[i].startArg = arg;
-            contexts[i].isBusy = 1;
+            contexts[i].wasCreated = 1;
             contexts[i].stack = (char *)realloc(contexts[i].stack, stacksize);
             
             USLOSS_ContextInit(
                 /* *context= */  &contexts[i].context,
                 /* *stack= */     contexts[i].stack,
-                /* stackSize= */  USLOSS_MIN_STACK,
+                /* stackSize= */  stacksize,
                 /* *pageTable= */ P3_AllocatePageTable(i),
                 /* (*func)= */    launch);
             *cid = i;
@@ -92,11 +92,10 @@ int P1ContextSwitch(int cid) {
     }
 
     USLOSS_Context context1;
-    if (-1 < cid && cid < P1_MAXPROC && !contexts[cid].isBusy) {
-        context1 = contexts[cid].context;
-    } else {
+    if (cid <= -1 || P1_MAXPROC <= cid || !contexts[cid].wasCreated) {
         return P1_INVALID_CID;
     }
+    context1 = contexts[cid].context;
     
     currentCid = cid;
     USLOSS_ContextSwitch(&context0, &context1); 
