@@ -37,13 +37,17 @@ static void IllegalMessage(int n, void *arg){
     USLOSS_Halt(0);
 }
 
-void P1ContextInit(void)
-{
+static void checkInKernelMode() {
     // Checking if we are in kernal mode
     if(!(USLOSS_PsrGet() & USLOSS_PSR_CURRENT_MODE)){
         USLOSS_IntVec[USLOSS_ILLEGAL_INT] = IllegalMessage;
         USLOSS_IllegalInstruction();
     }
+}
+
+void P1ContextInit(void)
+{
+    checkInKernelMode();
     // Setting memory to 0
     memset(contexts, 0, P1_MAXPROC);
     // Clearing memory
@@ -52,6 +56,7 @@ void P1ContextInit(void)
 }
 
 int P1ContextCreate(void (*func)(void *), void *arg, int stacksize, int *cid) {
+    checkInKernelMode();
     // find a free context and initialize it
     // allocate the stack, specify the startFunc, etc.
     if (stacksize < USLOSS_MIN_STACK) {
@@ -60,7 +65,7 @@ int P1ContextCreate(void (*func)(void *), void *arg, int stacksize, int *cid) {
     int i;
     for (i=0; i<P1_MAXPROC; i++) {
         if (contexts[i].wasCreated == 0) {
-            USLOSS_Console("Found Valid Memory at %d\n", i);
+            // USLOSS_Console("Found Valid Memory at %d\n", i);
             contexts[i].startFunc = func;
             contexts[i].startArg = arg;
             contexts[i].wasCreated = 1;
@@ -80,7 +85,7 @@ int P1ContextCreate(void (*func)(void *), void *arg, int stacksize, int *cid) {
 }
 
 int P1ContextSwitch(int cid) {
-    // USLOSS_Console("Calling Switch\n");
+    checkInKernelMode();
     if (cid == currentCid) {
         return P1_SUCCESS; // already there, do nothing.
     }
@@ -100,10 +105,11 @@ int P1ContextSwitch(int cid) {
 }
 
 int P1ContextFree(int cid) {
+    checkInKernelMode();
     int result = P1_SUCCESS;
-    if (-1 >= cid || cid >= P1_MAXPROC) {
+    if (-1 >= cid || cid >= P1_MAXPROC || !contexts[cid].wasCreated) {
         result = P1_INVALID_CID;
-    } else if(contexts[cid].wasCreated){
+    } else if(cid == currentCid){
         result = P1_CONTEXT_IN_USE;
     }else{
         free(contexts[cid].stack);
@@ -138,6 +144,7 @@ P1EnableInterrupts(void)
 int 
 P1DisableInterrupts(void) 
 {
+    checkInKernelMode();
     int enabled = FALSE;
     // set enabled to TRUE if interrupts are already enabled
     // clear the interrupt bit in the PSR
