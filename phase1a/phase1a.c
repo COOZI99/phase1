@@ -49,7 +49,7 @@ void P1ContextInit(void)
 {
     checkInKernelMode();
     // Setting memory to 0
-    memset(contexts, 0, P1_MAXPROC);
+    memset(contexts, 0, P1_MAXPROC * sizeof(Context));
     // Clearing memory
 
     // Calling illegal message and exiting program
