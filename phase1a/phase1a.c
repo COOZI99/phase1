@@ -33,7 +33,6 @@ static void launch(void)
 }
 
 static void IllegalMessage(int n, void *arg){
-    USLOSS_Console("Error: Not in Kernel mode\n");
     USLOSS_Halt(0);
 }
 
