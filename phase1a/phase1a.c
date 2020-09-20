@@ -1,3 +1,16 @@
+/**
+ *  Authors: Bianca Lara, Ann Chang
+ *  Due Date: September 16th, 2020
+ *  Phase 1a
+ *  Submission Type: Group
+ *  Comments: The phase 1a implementation of phase 1. Implements the 
+ *  outlined functions for creating, switching, and freeing contexts
+ *  as well as enabling and disabling interrupts. The Context struct
+ *  had two variables added to it: int wasCreated and char *stack
+ *  which determines if the context was initialized and stores the
+ *  context stack respectively.
+ */
+
 #include "phase1Int.h"
 #include "usloss.h"
 #include <stdlib.h>
@@ -7,15 +20,12 @@
 extern  USLOSS_PTE  *P3_AllocatePageTable(int cid);
 extern  void        P3_FreePageTable(int cid);
 extern  void        *memset(void *str, int c, size_t n);
-extern  int         memcmp(const void *str1, const void *str2, size_t n);
-extern  void        *realloc(void *ptr, size_t size);
 
 typedef struct Context {
     void            (*startFunc)(void *);
     void            *startArg;
     int wasCreated;
     USLOSS_Context  context;
-    // you'll need more stuff here
     char *stack;
 } Context;
 
@@ -32,6 +42,7 @@ static void launch(void)
     contexts[currentCid].startFunc(contexts[currentCid].startArg);
 }
 
+// Halting the program for an illegal message
 static void IllegalMessage(int n, void *arg){
     USLOSS_Halt(0);
 }
@@ -49,9 +60,6 @@ void P1ContextInit(void)
     checkInKernelMode();
     // Setting memory to 0
     memset(contexts, 0, P1_MAXPROC * sizeof(Context));
-    // Clearing memory
-
-    // Calling illegal message and exiting program
 }
 
 int P1ContextCreate(void (*func)(void *), void *arg, int stacksize, int *cid) {
@@ -64,7 +72,6 @@ int P1ContextCreate(void (*func)(void *), void *arg, int stacksize, int *cid) {
     int i;
     for (i=0; i<P1_MAXPROC; i++) {
         if (contexts[i].wasCreated == 0) {
-            // USLOSS_Console("Found Valid Memory at %d\n", i);
             contexts[i].startFunc = func;
             contexts[i].startArg = arg;
             contexts[i].wasCreated = 1;
@@ -84,11 +91,12 @@ int P1ContextCreate(void (*func)(void *), void *arg, int stacksize, int *cid) {
 }
 
 int P1ContextSwitch(int cid) {
+    // Switching from the current context to the specified context
     checkInKernelMode();
     if (cid == currentCid) {
         return P1_SUCCESS; // already there, do nothing.
     }
-
+    
     if (cid <= -1 || P1_MAXPROC <= cid || !contexts[cid].wasCreated) {
         return P1_INVALID_CID;
     }
@@ -104,6 +112,7 @@ int P1ContextSwitch(int cid) {
 }
 
 int P1ContextFree(int cid) {
+    // Frees the specified context if it was previously created
     checkInKernelMode();
     int result = P1_SUCCESS;
     if (-1 >= cid || cid >= P1_MAXPROC || !contexts[cid].wasCreated) {
@@ -117,7 +126,6 @@ int P1ContextFree(int cid) {
     }
     return result;
 }
-
 
 void 
 P1EnableInterrupts(void) 

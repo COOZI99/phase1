@@ -2,3 +2,6 @@
 *.o
 *.out
 *.a
+phase1b/tests/*
+phase1a/tests/test*
+phase1a/workspace*

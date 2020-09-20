@@ -16,9 +16,11 @@ typedef struct PCB {
     int             priority;           // process's priority
     P1_State        state;              // state of the PCB
     // more fields here
+    PCB *children;
 } PCB;
 
 static PCB processTable[P1_MAXPROC];   // the process table
+static int currentPid = -1;
 
 void P1ProcInit(void)
 {
@@ -31,9 +33,22 @@ void P1ProcInit(void)
 
 }
 
+// Halting the program for an illegal message
+static void IllegalMessage(int n, void *arg){
+    P1_Quit(1024);
+}
+
+static void checkInKernelMode() {
+    // Checking if we are in kernal mode
+    if(!(USLOSS_PsrGet() & USLOSS_PSR_CURRENT_MODE)){
+        USLOSS_IntVec[USLOSS_ILLEGAL_INT] = IllegalMessage;
+        USLOSS_IllegalInstruction();
+    }
+}
+
 int P1_GetPid(void) 
 {
-    return 0;
+    return currentPid;
 }
 
 int P1_Fork(char *name, int (*func)(void*), void *arg, int stacksize, int priority, int tag, int *pid ) 
@@ -55,8 +70,11 @@ void
 P1_Quit(int status) 
 {
     // check for kernel mode
+    checkInKernelMode();
     // disable interrupts
+    int ret = P1DisableInterrupts();
     // remove from ready queue, set status to P1_STATE_QUIT
+
     // if first process verify it doesn't have children, otherwise give children to first process
     // add ourself to list of our parent's children that have quit
     // if parent is in state P1_STATE_JOINING set its state to P1_STATE_READY
@@ -78,6 +96,13 @@ int
 P1SetState(int pid, P1_State state, int sid) 
 {
     int result = P1_SUCCESS;
+    if (pid < 0 || P1_MAXPROC <= pid || contexts[processTable[pid].cid].wasCreated == 0) {
+        return P1_INVALID_PID;
+    }
+    if (state != P1_STATE_READY && state != P1_STATE_JOINING && state != P1_STATE_BLOCKED
+        && state != P1_STATE_QUIT) {
+            return P1_INVALID_STATE;
+        }
     // do stuff here
     return result;
 }
@@ -85,6 +110,15 @@ P1SetState(int pid, P1_State state, int sid)
 void
 P1Dispatch(int rotate)
 {
+    int i;
+    int cid=-1;
+    int maxPriority = 7;
+    for (i=0; i<P1_MAXPROC; i++) {
+        if (processTable[i].priority < maxPriority) {
+
+        }
+    }
+
     // select the highest-priority runnable process
     // call P1ContextSwitch to switch to that process
 }
