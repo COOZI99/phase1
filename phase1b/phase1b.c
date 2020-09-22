@@ -9,6 +9,12 @@ Phase 1b
 #include <assert.h>
 #include <stdio.h>
 
+// Implementing a circularly linked list for best queue structure
+typedef struct Node {
+    int          val;
+    struct Node* next;
+} Node;
+
 typedef struct PCB {
     int             cid;                // context's ID
     int             cpuTime;            // process's running time
@@ -16,11 +22,16 @@ typedef struct PCB {
     int             priority;           // process's priority
     P1_State        state;              // state of the PCB
     // more fields here
-    PCB *children;
+    int             parentPid;          // The process ID of the parent
+    Node            *childrenPids;      // The children process IDs of the process
+    int             numChildren;        // The total number of children
+    Node           *quitChildren;      // The children who have quit
+    int             numQuit;            // The number of children who have quit
+    
 } PCB;
 
 static PCB processTable[P1_MAXPROC];   // the process table
-static int currentPid = -1;
+static Node *readyQueue;               // pointer to last item in circular ready queue
 
 void P1ProcInit(void)
 {
@@ -48,7 +59,7 @@ static void checkInKernelMode() {
 
 int P1_GetPid(void) 
 {
-    return currentPid;
+    return *readyQueue;
 }
 
 int P1_Fork(char *name, int (*func)(void*), void *arg, int stacksize, int priority, int tag, int *pid ) 
@@ -74,10 +85,33 @@ P1_Quit(int status)
     // disable interrupts
     int ret = P1DisableInterrupts();
     // remove from ready queue, set status to P1_STATE_QUIT
+    int currentPid = readyQueue->val;
+    readyQueue++;
+    ret = P1SetState(currentPid, P1_STATE_QUIT, 0);
 
     // if first process verify it doesn't have children, otherwise give children to first process
+    if (currentPid == 0 && processTable[currentPid].numChildren > processTable[currentPid].numQuit) {
+        USLOSS_Console("First process quitting with children, halting.\n");
+        USLOSS_Halt(1);
+    }
+    if (currentPid > 0) {
+        Node* head = processTable[0].childrenPids->next;
+        processTable[0].childrenPids->next = processTable[currentPid].childrenPids->next;
+        processTable[currentPid].childrenPids->next = head;
+        processTable[0].numChildren += processTable[currentPid].numChildren;
+        processTable[0].numQuit += processTable[currentPid].numQuit;
+    }
     // add ourself to list of our parent's children that have quit
+    Node* head = processTable[processTable[currentPid].parentPid].quitChildren->next;
+    Node* quitNode;
+    quiteNode->val = currentPid;
+    quitNode->next = head;
+    processTable[processTable[currentPid].parentPid].quitChildren->next = quitNode;
+    processTable[processTable[currentPid].parentPid].numQuit += 1;
     // if parent is in state P1_STATE_JOINING set its state to P1_STATE_READY
+    if (processTable[processTable[currentPid].parentPid].state == P1_STATE_JOINING) {
+        P1SetState(processTable[currentPid].parentPid, P1_STATE_READY, 0);
+    }
     P1Dispatch(FALSE);
     // should never get here
     assert(0);
@@ -95,7 +129,6 @@ P1GetChildStatus(int tag, int *cpid, int *status)
 int
 P1SetState(int pid, P1_State state, int sid) 
 {
-    int result = P1_SUCCESS;
     if (pid < 0 || P1_MAXPROC <= pid || contexts[processTable[pid].cid].wasCreated == 0) {
         return P1_INVALID_PID;
     }
@@ -103,8 +136,16 @@ P1SetState(int pid, P1_State state, int sid)
         && state != P1_STATE_QUIT) {
             return P1_INVALID_STATE;
         }
-    // do stuff here
-    return result;
+    if (state == P1_STATE_READY) {
+        // adding to the ready queue
+        Node *head = readyQueue->next;
+        Node *readyNode;
+        readyNode->val = pid;
+        readyNode->next = head;
+        readyQueue->next = readyNode;
+    }
+    processTable[pid].state = state;
+    return P1_SUCCESS;
 }
 
 void
