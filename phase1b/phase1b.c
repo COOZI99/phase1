@@ -21,15 +21,18 @@ typedef struct PCB {
     char            name[P1_MAXNAME+1]; // process's name
     int             priority;           // process's priority
     P1_State        state;              // state of the PCB
+    int             tag;
     // more fields here
-        int             parentPid;          // The process ID of the parent
+    int             parentPid;          // The process ID of the parent
     Node            *childrenPids;      // The children process IDs of the process
     int             numChildren;        // The total number of children
     Node           *quitChildren;      // The children who have quit
     int             numQuit;            // The number of children who have quit
-  
+    int             sid;
+    
 } PCB;
 
+int currentPID = 0;
 static PCB processTable[P1_MAXPROC];   // the process table
 static Node *readyQueue;               // pointer to last item in circular ready queue
 
@@ -37,8 +40,11 @@ void P1ProcInit(void)
 {
     P1ContextInit();
     for (int i = 0; i < P1_MAXPROC; i++) {
+        processTable[i].sid = -1;
+        processTable[i].cid = 0;
+        processTable[i].cpuTime = 0;
+        processTable[i].priority = 0;
         processTable[i].state = P1_STATE_FREE;
-        // initialize the rest of the PCB
     }
     // initialize everything else
 
@@ -67,14 +73,100 @@ int P1_Fork(char *name, int (*func)(void*), void *arg, int stacksize, int priori
     int result = P1_SUCCESS;
 
     // check for kernel mode
+    checkInKernelMode();
+
     // disable interrupts
+    int val = P1DisableInterrupts();
+
     // check all parameters
-    // create a context using P1ContextCreate
-    // allocate and initialize PCB
-    // if this is the first process or this process's priority is higher than the 
-    //    currently running process call P1Dispatch(FALSE)
-    // re-enable interrupts if they were previously enabled
-    return result;
+    // checking if tag is 0 or 1
+    if( tag != 0 || tag != 1){
+        return P1_INVALID_TAG;
+    }
+
+    // checking priority
+    if(priority < 1 || priority > 6){
+        return P1_INVALID_PRIORITY;
+    }
+
+    // checking stacksize
+    if( stacksize < USLOSS_MIN_STACK){
+        return P1_INVALID_STACK;
+    }
+
+    // checking if name is null
+    if(name == NULL){
+        return P1_NAME_IS_NULL;
+    }
+
+    if(sizeof(name) < P1_MAXNAME){
+        return P1_NAME_TOO_LONG;
+    }
+    int i;
+    for (i=0; i<P1_MAXPROC; i++) {
+        if(processTable[i].state != P1_STATE_FREE && strcmp(name,processTable[i].name) == 0){
+            return P1_DUPLICATE_NAME;
+        }
+        // create a context using P1ContextCreate
+        // allocate and initialize PCB
+        if (processTable[i].state == P1_STATE_FREE) {
+            // Setting the first fork
+            if(i == 0){
+                processTable[i].priority = 6;
+                processTable[i].parentPid = 0;
+                processTable[i].numChildren = 0;
+            }else{
+                processTable[i].priority = priority;
+                processTable[i].parentPid = currentPID;
+                Node *temp = (Node*)malloc(sizeof(Node)); 
+                temp->next = NULL;
+                temp->val = i;
+                if(processTable[currentPID].numChildren == 0){
+                    processTable[currentPID].childrenPids = temp;
+                }else{
+
+                }
+
+            }
+            int cid;
+            int retval = P1ContextCreate(func,arg,stacksize,&cid);
+            processTable[i].cid = cid;
+            processTable[i].cpuTime = 0;
+            strcpy(processTable[i].name,name);
+            processTable[i].state = P1_STATE_READY;
+            processTable[i].numQuit = 0;
+            processTable[i].tag = tag;
+           
+
+            // if this is the first process or this process's priority is higher than the 
+            //    currently running process call P1Dispatch(FALSE)
+            // re-enable interrupts if they were previously enabled
+            int oldPriority = processTable[currentPID].priority;
+            if(priority < oldPriority){
+                currentPID = i;
+                P1Dispatch(FALSE);
+            }
+            *pid = i;
+            return P1_SUCCESS;
+        }
+    }
+    
+
+
+    return P1_TOO_MANY_PROCESSES;
+}
+
+// Halting the program for an illegal message
+static void IllegalMessage(int n, void *arg){
+    P1_Quit(1024);
+}
+
+static void checkInKernelMode() {
+    // Checking if we are in kernal mode
+    if(!(USLOSS_PsrGet() & USLOSS_PSR_CURRENT_MODE)){
+        USLOSS_IntVec[USLOSS_ILLEGAL_INT] = IllegalMessage;
+        USLOSS_IllegalInstruction();
+    }
 }
 
 void 
@@ -129,7 +221,7 @@ P1GetChildStatus(int tag, int *cpid, int *status)
 int
 P1SetState(int pid, P1_State state, int sid) 
 {
-    if (pid < 0 || P1_MAXPROC <= pid || contexts[processTable[pid].cid].wasCreated == 0) {
+    if (pid < 0 || P1_MAXPROC <= pid || processTable[pid].state == P1_STATE_FREE) {
         return P1_INVALID_PID;
     }
     if (state != P1_STATE_READY && state != P1_STATE_JOINING && state != P1_STATE_BLOCKED
@@ -168,6 +260,24 @@ int
 P1_GetProcInfo(int pid, P1_ProcInfo *info)
 {
     int         result = P1_SUCCESS;
-    // fill in info here
+    if (pid < 0 || P1_MAXPROC <= pid || processTable[pid].state == P1_STATE_FREE) {
+        return P1_INVALID_PID;
+    }
+    strcmp(info->name,processTable[pid].name);
+    info->sid = processTable[pid].sid;
+    info->state = processTable[pid].state;
+    info->priority = processTable[pid].priority;
+    info->tag = processTable[pid].tag;
+    info->cpu = processTable[pid].cpuTime;
+    info->parent = processTable[pid].parentPid;
+    info->numChildren = processTable[pid].numChildren;
+    int array[P1_MAXPROC];
+    int i;
+    Node *head = processTable[pid].childrenPids;
+    for(i = 0; i < processTable[pid].numChildren; i++){
+        array[i] = head->val;
+        head = head->next;
+    }
+    info->children[P1_MAXPROC] = array;
     return result;
 }
