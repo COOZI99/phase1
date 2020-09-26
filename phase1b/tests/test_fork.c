@@ -36,6 +36,7 @@ startup(int argc, char **argv)
     USLOSS_Console("startup\n");
     // fork the first process with priority 6 so it doesn't fail students' check
     // that priority must be 6 for process with pid = 0
+     USLOSS_Console("forking\n");
     rc = P1_Fork("P6Proc", P6Proc, "Hello World!\n", USLOSS_MIN_STACK, 6, 0, &pid);
     assert(rc == P1_SUCCESS);
     // P1_Fork should not return
