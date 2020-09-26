@@ -67,14 +67,16 @@ static void checkInKernelMode() {
 
 static void launch(void *arg) {
     // int pid = (int) *arg;  FIGURE THIS OUT
-    int pid = 0;
+    int pid = readyQueue->val;
+    // Add a clock for how long this function takes to run
     int retVal = processTable[pid].func(processTable[pid].arg);
+    // Stop clock and store value in cpuTime
     P1_Quit(retVal);
 }
 
 int P1_GetPid(void) 
 {
-    return readyQueue->val;
+    return readyQueue->next->val;
 }
 
 void reEnableInterrupts(int enabled) {
@@ -253,6 +255,12 @@ P1SetState(int pid, P1_State state, int sid)
         readyNode->next = head;
         readyQueue->next = readyNode;
     }
+    if (state == P1_STATE_BLOCKED) {
+        processTable[pid].sid = sid;
+    }
+    if (state == P1_STATE_JOINING && processTable[pid].numQuit > 0) {
+        return P1_CHILD_QUIT;
+    }
     processTable[pid].state = state;
     return P1_SUCCESS;
 }
@@ -260,17 +268,46 @@ P1SetState(int pid, P1_State state, int sid)
 void
 P1Dispatch(int rotate)
 {
-    int i;
-    // int cid=-1;
-    int maxPriority = 7;
-    for (i=0; i<P1_MAXPROC; i++) {
-        if (processTable[i].priority < maxPriority) {
-
+    Node *ptr = readyQueue->next;
+    Node *highestNode = readyQueue->next;
+    // select the highest-priority runnable process
+    while (ptr->next != readyQueue->next) {
+        if (processTable[ptr->next->val].priority < processTable[highestNode->val].priority) {
+            highestNode = ptr;
         }
     }
 
-    // select the highest-priority runnable process
-    // call P1ContextSwitch to switch to that process
+    if (highestNode != readyQueue->next) {
+        // call P1ContextSwitch to switch to that process
+        Node *newNode = ptr->next;
+        ptr->next = ptr->next->next;
+        newNode->next = readyQueue->next;
+        readyQueue->next = newNode;
+        int ret = P1ContextSwitch(processTable[newNode->val].cid);
+        if (ret != P1_SUCCESS) {
+            USLOSS_Halt(1);
+        }
+    } else if (rotate == TRUE) {
+        // if rotate is true, find the next process with same priority and run it
+        readyQueue = readyQueue->next;
+        ptr = readyQueue;
+        while (ptr->next != readyQueue) {
+            if (processTable[ptr->next->val].priority == processTable[readyQueue->val].priority) {
+                // call P1ContextSwitch to switch to that process
+                Node *newNode = ptr->next;
+                ptr->next = ptr->next->next;
+                newNode->next = readyQueue->next;
+                readyQueue->next = newNode;
+                int ret = P1ContextSwitch(processTable[newNode->val].cid);
+                if (ret != P1_SUCCESS) {
+                    USLOSS_Halt(1); // Ask about this later!!!!!!
+                }
+                return;
+            }
+        }
+        // No same priority found, returning current node to head of ready queue
+        readyQueue = ptr;
+    }
 }
 
 int
