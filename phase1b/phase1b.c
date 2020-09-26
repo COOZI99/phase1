@@ -31,7 +31,6 @@ typedef struct PCB {
     int             parentPid;          // The process ID of the parent
     Node            *childrenPids;      // The children process IDs of the process
     int             numChildren;        // The total number of children
-    Node           *quitChildren;       // The children who have quit
     int             numQuit;            // The number of children who have quit
     int             sid;
     
@@ -153,7 +152,7 @@ int P1_Fork(char *name, int (*func)(void*), void *arg, int stacksize, int priori
                 if(processTable[currentPID].numChildren == 0){
                     processTable[currentPID].childrenPids = temp;
                 }else{
-                    Node * head = processTable[currentPID].childrenPids;
+                    Node *head = processTable[currentPID].childrenPids;
                     while(head != NULL){
                         if(head->next == NULL){
                             head->next = temp;
@@ -204,41 +203,38 @@ P1_Quit(int status)
     // check for kernel mode
     checkInKernelMode();
     // disable interrupts
-    int ret = P1DisableInterrupts();
+    int enabled = P1DisableInterrupts();
     // remove from ready queue, set status to P1_STATE_QUIT
-    int currentPid = readyQueue->val;
-    readyQueue++;
-    ret = P1SetState(currentPid, P1_STATE_QUIT, 0);
-    if (ret != P1_SUCCESS) {
+    Node *currentNode = readyQueue->next;
+    int currentPid = currentNode->val;
+    readyQueue = readyQueue->next->next;
+    free(currentNode); // Should this be done here or in set state?
+    int retVal = P1SetState(currentPid, P1_STATE_QUIT, 0);
+    if (retVal != P1_SUCCESS) {
         USLOSS_Halt(1);
     }
-
     // if first process verify it doesn't have children, otherwise give children to first process
     if (currentPid == 0 && processTable[currentPid].numChildren > processTable[currentPid].numQuit) {
         USLOSS_Console("First process quitting with children, halting.\n");
         USLOSS_Halt(1);
     }
     if (currentPid > 0) {
-        Node* head = processTable[0].childrenPids->next;
+        Node *head = processTable[0].childrenPids->next;
         processTable[0].childrenPids->next = processTable[currentPid].childrenPids->next;
         processTable[currentPid].childrenPids->next = head;
         processTable[0].numChildren += processTable[currentPid].numChildren;
         processTable[0].numQuit += processTable[currentPid].numQuit;
     }
     // add ourself to list of our parent's children that have quit
-    Node* head = processTable[processTable[currentPid].parentPid].quitChildren->next;
-    Node* quitNode = malloc(sizeof(Node));
-    quitNode->val = currentPid;
-    quitNode->next = head;
-    processTable[processTable[currentPid].parentPid].quitChildren->next = quitNode;
     processTable[processTable[currentPid].parentPid].numQuit += 1;
     // if parent is in state P1_STATE_JOINING set its state to P1_STATE_READY
     if (processTable[processTable[currentPid].parentPid].state == P1_STATE_JOINING) {
-        ret = P1SetState(processTable[currentPid].parentPid, P1_STATE_READY, 0);
-        if (ret != P1_SUCCESS) {
+        retVal = P1SetState(processTable[currentPid].parentPid, P1_STATE_READY, 0);
+        if (retVal != P1_SUCCESS) {
             USLOSS_Halt(1);
         }
     }
+    reEnableInterrupts(enabled);
     P1Dispatch(FALSE);
     // should never get here
     assert(0);
