@@ -1,0 +1,60 @@
+
+*** These modified files were found in JOE when it aborted on Tue Sep 22 16:01:03 2020
+*** JOE was aborted by UNIX signal 1
+
+*** File '/p4/ha/achang7/cs452/phase1/.git/COMMIT_EDITMSG'
+Merge branch 'master' of https://github.com/COOZI99/phase1 into annchang
+
+Conflicts:
+	.gitignore
+	phase1a/phase1a.c
+#
+# It looks like you may be committing a merge.
+# If this is not correct, please remove the file
+#	.git/MERGE_HEAD
+# and try again.
+
+
+# Please enter the commit message for your changes. Lines starting
+# with '#' will be ignored, and an empty message aborts the commit.
+#
+# Committer: achang2018 <achang7@cs.arizona.edu>
+#
+# On branch annchang
+# Your branch and 'origin/master' have diverged,
+# and have 21 and 5 different commits each, respectively.
+#   (use "git pull" to merge the remote branch into yours)
+#
+# All conflicts fixed but you are still merging.
+#
+# Changes to be committed:
+#	modified:   .gitignore
+#	modified:   phase1a/phase1a.c
+#	new file:   phase1a/phase1a.d
+#	new file:   phase1a/tests/test_one_context.d
+#
+
+*** File '(Unnamed)'
+/p4/ha/achang7/cs452/phase1-starter/.git/COMMIT_EDITMSG
+/p4/ha/achang7/cs452/phase1/.git/COMMIT_EDITMSG
+* Build Log *
+/p4/ha/achang7/cs452/phase1/.git/COMMIT_EDITMSG
+/p4/ha/achang7/cs452/phase1/.git/COMMIT_EDITMSG
+* Build Log *
+/p4/ha/achang7/cs452/phase1/.git/COMMIT_EDITMSG
+/p4/ha/achang7/cs452/phase1/.git/COMMIT_EDITMSG
+
+*** These modified files were found in JOE when it aborted on Sat Sep 26 14:56:18 2020
+*** JOE was aborted by UNIX signal 15
+
+*** File '(Unnamed)'
+/p4/ha/achang7/cs452/phase1-starter/.git/COMMIT_EDITMSG
+/p4/ha/achang7/cs452/phase1/.git/COMMIT_EDITMSG
+* Build Log *
+/p4/ha/achang7/cs452/phase1/.git/COMMIT_EDITMSG
+/p4/ha/achang7/cs452/phase1/.git/COMMIT_EDITMSG
+* Build Log *
+/p4/ha/achang7/cs452/phase1/.git/COMMIT_EDITMSG
+/p4/ha/achang7/cs452/phase1/.git/COMMIT_EDITMSG
+/p4/ha/achang7/cs452/phase1/.git/COMMIT_EDITMSG
+/p4/ha/achang7/cs452/phase1/.git/COMMIT_EDITMSG

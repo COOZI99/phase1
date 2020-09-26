@@ -1,6 +1,8 @@
 #include <phase1.h>
 #include <phase1Int.h>
 #include <assert.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 // Test forking a process
 static int
