@@ -23,6 +23,8 @@ typedef struct PCB {
     P1_State        state;              // state of the PCB
     int             tag;
     // more fields here
+    int             (*func)(void *);
+    void            *arg;
     int             parentPid;          // The process ID of the parent
     Node            *childrenPids;      // The children process IDs of the process
     int             numChildren;        // The total number of children
@@ -63,15 +65,26 @@ static void checkInKernelMode() {
     }
 }
 
+static void launch(void *arg) {
+    // int pid = (int) *arg;  FIGURE THIS OUT
+    int pid = 0;
+    int retVal = processTable[pid].func(processTable[pid].arg);
+    P1_Quit(retVal);
+}
+
 int P1_GetPid(void) 
 {
-    return *readyQueue;
+    return readyQueue->val;
+}
+
+void reEnableInterrupts(int enabled) {
+    if (enabled == TRUE) {
+        P1EnableInterrupts();
+    }
 }
 
 int P1_Fork(char *name, int (*func)(void*), void *arg, int stacksize, int priority, int tag, int *pid ) 
 {
-    int result = P1_SUCCESS;
-
     // check for kernel mode
     checkInKernelMode();
 
@@ -81,30 +94,36 @@ int P1_Fork(char *name, int (*func)(void*), void *arg, int stacksize, int priori
     // check all parameters
     // checking if tag is 0 or 1
     if( tag != 0 || tag != 1){
+        reEnableInterrupts(val);
         return P1_INVALID_TAG;
     }
 
     // checking priority
     if(priority < 1 || priority > 6){
+        reEnableInterrupts(val);
         return P1_INVALID_PRIORITY;
     }
 
     // checking stacksize
     if( stacksize < USLOSS_MIN_STACK){
+        reEnableInterrupts(val);
         return P1_INVALID_STACK;
     }
 
     // checking if name is null
     if(name == NULL){
+        reEnableInterrupts(val);
         return P1_NAME_IS_NULL;
     }
 
     if(sizeof(name) < P1_MAXNAME){
+        reEnableInterrupts(val);
         return P1_NAME_TOO_LONG;
     }
     int i;
     for (i=0; i<P1_MAXPROC; i++) {
         if(processTable[i].state != P1_STATE_FREE && strcmp(name,processTable[i].name) == 0){
+            reEnableInterrupts(val);
             return P1_DUPLICATE_NAME;
         }
         // create a context using P1ContextCreate
@@ -128,8 +147,14 @@ int P1_Fork(char *name, int (*func)(void*), void *arg, int stacksize, int priori
                 }
 
             }
+            *pid = i;
             int cid;
-            int retval = P1ContextCreate(func,arg,stacksize,&cid);
+            // int retval = P1ContextCreate(func,arg,stacksize,&cid);
+            int retVal = P1ContextCreate(launch, pid, stacksize, &cid);
+            if (retVal != P1_SUCCESS) {
+                reEnableInterrupts(val);
+                return retVal;
+            }
             processTable[i].cid = cid;
             processTable[i].cpuTime = 0;
             strcpy(processTable[i].name,name);
@@ -146,27 +171,13 @@ int P1_Fork(char *name, int (*func)(void*), void *arg, int stacksize, int priori
                 currentPID = i;
                 P1Dispatch(FALSE);
             }
-            *pid = i;
+            // *pid = i;
+            reEnableInterrupts(val);
             return P1_SUCCESS;
         }
     }
-    
-
-
+    reEnableInterrupts(val);
     return P1_TOO_MANY_PROCESSES;
-}
-
-// Halting the program for an illegal message
-static void IllegalMessage(int n, void *arg){
-    P1_Quit(1024);
-}
-
-static void checkInKernelMode() {
-    // Checking if we are in kernal mode
-    if(!(USLOSS_PsrGet() & USLOSS_PSR_CURRENT_MODE)){
-        USLOSS_IntVec[USLOSS_ILLEGAL_INT] = IllegalMessage;
-        USLOSS_IllegalInstruction();
-    }
 }
 
 void 
@@ -180,6 +191,9 @@ P1_Quit(int status)
     int currentPid = readyQueue->val;
     readyQueue++;
     ret = P1SetState(currentPid, P1_STATE_QUIT, 0);
+    if (ret != P1_SUCCESS) {
+        USLOSS_Halt(1);
+    }
 
     // if first process verify it doesn't have children, otherwise give children to first process
     if (currentPid == 0 && processTable[currentPid].numChildren > processTable[currentPid].numQuit) {
@@ -195,14 +209,17 @@ P1_Quit(int status)
     }
     // add ourself to list of our parent's children that have quit
     Node* head = processTable[processTable[currentPid].parentPid].quitChildren->next;
-    Node* quitNode;
-    quiteNode->val = currentPid;
+    Node* quitNode = malloc(sizeof(Node));
+    quitNode->val = currentPid;
     quitNode->next = head;
     processTable[processTable[currentPid].parentPid].quitChildren->next = quitNode;
     processTable[processTable[currentPid].parentPid].numQuit += 1;
     // if parent is in state P1_STATE_JOINING set its state to P1_STATE_READY
     if (processTable[processTable[currentPid].parentPid].state == P1_STATE_JOINING) {
-        P1SetState(processTable[currentPid].parentPid, P1_STATE_READY, 0);
+        ret = P1SetState(processTable[currentPid].parentPid, P1_STATE_READY, 0);
+        if (ret != P1_SUCCESS) {
+            USLOSS_Halt(1);
+        }
     }
     P1Dispatch(FALSE);
     // should never get here
@@ -231,7 +248,7 @@ P1SetState(int pid, P1_State state, int sid)
     if (state == P1_STATE_READY) {
         // adding to the ready queue
         Node *head = readyQueue->next;
-        Node *readyNode;
+        Node *readyNode = malloc(sizeof(Node));
         readyNode->val = pid;
         readyNode->next = head;
         readyQueue->next = readyNode;
@@ -244,7 +261,7 @@ void
 P1Dispatch(int rotate)
 {
     int i;
-    int cid=-1;
+    // int cid=-1;
     int maxPriority = 7;
     for (i=0; i<P1_MAXPROC; i++) {
         if (processTable[i].priority < maxPriority) {
@@ -263,7 +280,7 @@ P1_GetProcInfo(int pid, P1_ProcInfo *info)
     if (pid < 0 || P1_MAXPROC <= pid || processTable[pid].state == P1_STATE_FREE) {
         return P1_INVALID_PID;
     }
-    strcmp(info->name,processTable[pid].name);
+    // strcmp(info->name,processTable[pid].name);
     info->sid = processTable[pid].sid;
     info->state = processTable[pid].state;
     info->priority = processTable[pid].priority;
@@ -271,13 +288,14 @@ P1_GetProcInfo(int pid, P1_ProcInfo *info)
     info->cpu = processTable[pid].cpuTime;
     info->parent = processTable[pid].parentPid;
     info->numChildren = processTable[pid].numChildren;
-    int array[P1_MAXPROC];
+    // int array[P1_MAXPROC];
     int i;
     Node *head = processTable[pid].childrenPids;
     for(i = 0; i < processTable[pid].numChildren; i++){
-        array[i] = head->val;
+        // array[i] = head->val;
+        info->children[i] = head->val;
         head = head->next;
     }
-    info->children[P1_MAXPROC] = array;
+    // info->children[P1_MAXPROC] = array;
     return result;
 }
