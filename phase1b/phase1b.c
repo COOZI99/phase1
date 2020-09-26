@@ -28,7 +28,7 @@ typedef struct PCB {
     int             parentPid;          // The process ID of the parent
     Node            *childrenPids;      // The children process IDs of the process
     int             numChildren;        // The total number of children
-    Node           *quitChildren;      // The children who have quit
+    Node           *quitChildren;       // The children who have quit
     int             numQuit;            // The number of children who have quit
     int             sid;
     
