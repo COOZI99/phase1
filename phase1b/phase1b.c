@@ -22,12 +22,12 @@ typedef struct PCB {
     int             priority;           // process's priority
     P1_State        state;              // state of the PCB
     // more fields here
-    int             parentPid;          // The process ID of the parent
+        int             parentPid;          // The process ID of the parent
     Node            *childrenPids;      // The children process IDs of the process
     int             numChildren;        // The total number of children
     Node           *quitChildren;      // The children who have quit
     int             numQuit;            // The number of children who have quit
-    
+  
 } PCB;
 
 static PCB processTable[P1_MAXPROC];   // the process table
@@ -171,10 +171,3 @@ P1_GetProcInfo(int pid, P1_ProcInfo *info)
     // fill in info here
     return result;
 }
-
-
-
-
-
-
-
