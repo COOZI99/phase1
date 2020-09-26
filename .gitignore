@@ -1,8 +1,7 @@
 *.d
-<<<<<<< HEAD
 *.o
 *.out
 *.a
-=======
-workspace*
->>>>>>> b869cc8dc2f8308758462534e80833063134c85f
+phase1b/tests/*
+phase1a/tests/test*
+phase1a/workspace*
