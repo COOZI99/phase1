@@ -29,7 +29,7 @@ VERSION = 1.1
 PHASE1A_VERSION = 1.0
 
 # Set to version of USLOSS you want to use.
-USLOSS_VERSION = 3.6
+USLOSS_VERSION = 3.8
 
 SRCS = $(wildcard *.c)
 
@@ -43,7 +43,7 @@ VGFLAGS = --track-origins=yes --leak-check=full --max-stackframe=100000
 LIBS = -lusloss$(USLOSS_VERSION) -lphase1a-$(PHASE1A_VERSION) -l$(PHASE)-$(VERSION) 
 
 # Change this if you want change which flags are passed to the C compiler.
-CFLAGS += -Wall -g -std=gnu99 -Werror
+CFLAGS += -Wall -g -std=gnu99 #-Werror
 #CFLAGS += -DDEBUG
 
 # You shouldn't need to change anything below here. 

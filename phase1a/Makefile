@@ -25,7 +25,7 @@ PHASE = phase1a
 VERSION = 1.0
 
 # Set to version of USLOSS you want to use.
-USLOSS_VERSION = 3.6
+USLOSS_VERSION = 3.8
 
 SRCS = $(wildcard *.c)
 
