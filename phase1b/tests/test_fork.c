@@ -8,6 +8,7 @@
 static int
 Output(void *arg) 
 {
+    USLOSS_Console("Calling Output\n");
     char *msg = (char *) arg;
 
     USLOSS_Console("%s", msg); 
@@ -18,6 +19,7 @@ Output(void *arg)
 
 int P6Proc(void *arg){
     int pid;
+    USLOSS_Console("Forking 2");
     int rc = P1_Fork("Hello", Output, "Hello World!\n", USLOSS_MIN_STACK, 1, 0, &pid);
     assert(rc == P1_SUCCESS);
     int status;
@@ -36,8 +38,10 @@ startup(int argc, char **argv)
     USLOSS_Console("startup\n");
     // fork the first process with priority 6 so it doesn't fail students' check
     // that priority must be 6 for process with pid = 0
+     USLOSS_Console("forking\n");
     rc = P1_Fork("P6Proc", P6Proc, "Hello World!\n", USLOSS_MIN_STACK, 6, 0, &pid);
     assert(rc == P1_SUCCESS);
+    USLOSS_Console("Return Value: %d\n", rc);
     // P1_Fork should not return
     assert(0);
 }
