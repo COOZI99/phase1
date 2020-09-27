@@ -34,6 +34,7 @@ typedef struct PCB {
     int             numChildren;        // The total number of children
     int             numQuit;            // The number of children who have quit
     int             sid;
+    int             status;
     
 } PCB;
 
@@ -75,7 +76,8 @@ static void launch(void *arg) {
     // Add a clock for how long this function takes to run
     int retVal = processTable[pid].func(processTable[pid].arg);
     // Stop clock and store value in cpuTime
-    P1_Quit(retVal);
+    // P1_Quit(retVal);
+    USLOSS_Halt(retVal);
 }
 
 int P1_GetPid(void) 
@@ -215,7 +217,7 @@ static void add_child(int pid){
 void 
 P1_Quit(int status) 
 {
-    USLOSS_Console("Calling Quits\n");
+    
     // check for kernel mode
     checkInKernelMode();
     // disable interrupts
@@ -223,8 +225,10 @@ P1_Quit(int status)
     // remove from ready queue, set status to P1_STATE_QUIT
     Node *currentNode = readyQueue->next;
     int currentPid = currentNode->val;
+    USLOSS_Console("Calling Quits for %d\n", currentPid);
     readyQueue->next = readyQueue->next->next;
     free(currentNode); // Should this be done here or in set state?
+    processTable[currentPid].status = status;
     int retVal = P1SetState(currentPid, P1_STATE_QUIT, 0);
     if (retVal != P1_SUCCESS) {
         USLOSS_Halt(1);
@@ -234,14 +238,16 @@ P1_Quit(int status)
         USLOSS_Console("First process quitting with children, halting.\n");
         USLOSS_Halt(1);
     }
-    if (currentPid > 0) {
+    if (currentPid > 0 && processTable[currentPid].childrenPids != NULL) {
         USLOSS_Console("Giving Children of %d to 0\n", currentPid);
         Node *head = processTable[0].childrenPids->next;
         processTable[0].childrenPids->next = processTable[currentPid].childrenPids->next;
         processTable[currentPid].childrenPids->next = head;
+        USLOSS_Console("Finished Swapping\n");
         processTable[0].numChildren += processTable[currentPid].numChildren;
         processTable[0].numQuit += processTable[currentPid].numQuit;
     }
+    USLOSS_Console("Adding ourselv to our parents quitters\n");
     // add ourself to list of our parent's children that have quit
     processTable[processTable[currentPid].parentPid].numQuit += 1;
     // if parent is in state P1_STATE_JOINING set its state to P1_STATE_READY
@@ -252,6 +258,7 @@ P1_Quit(int status)
         }
     }
     reEnableInterrupts(enabled);
+    USLOSS_Console("Dispatching next process..\n");
     P1Dispatch(FALSE);
     // should never get here
     assert(0);
