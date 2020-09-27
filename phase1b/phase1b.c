@@ -20,7 +20,6 @@ static void add_child(int pid);
 static void enqueue(int pid);
 // static void printQueue();
 // void printing(Node *head);
-// void inheritList(int parent, int child);
 void free_procress(int pid);
 void remove_child(int parent, int child);
 
@@ -47,7 +46,6 @@ typedef struct PCB {
 
 static PCB processTable[P1_MAXPROC];   // the process table
 static Node *readyQueue;               // pointer to last item in circular ready queue
-static int currentCpuTime;
 static int status;
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -111,6 +109,25 @@ static void add_child(int pid){
     processTable[currentpid].numChildren ++;
 }
 
+void free_procress(int pid){
+    Node *headC = processTable[pid].childrenPids;
+    int val = P1ContextFree(processTable[pid].cid);
+    assert(val == P1_SUCCESS);
+    while(headC != NULL){
+        Node *temp = headC;
+        headC = headC->next;
+        free(temp);
+    }
+
+    Node *headQ = processTable[pid].quitChildren;
+    while(headQ != NULL){
+        Node *temp = headQ;
+        headQ = headQ->next;
+        free(temp);
+    }
+    processTable[pid].state = P1_STATE_FREE;
+}
+
 void remove_child(int parent, int child){
     Node *headChildren = processTable[parent].childrenPids;
 
@@ -146,23 +163,6 @@ void remove_child(int parent, int child){
 
     processTable[parent].numChildren --;
     processTable[parent].numQuit --;
-}
-
-void free_procress(int pid){
-    Node *headC = processTable[pid].childrenPids;
-    while(headC != NULL){
-        Node *temp = headC;
-        headC = headC->next;
-        free(temp);
-    }
-
-    Node *headQ = processTable[pid].quitChildren;
-    while(headQ != NULL){
-        Node *temp = headQ;
-        headQ = headQ->next;
-        free(temp);
-    }
-    processTable[pid].state = P1_STATE_FREE;
 }
 
 ////////////////////////////////////////////////////////////
@@ -222,6 +222,7 @@ int P1_Fork(char *name, int (*func)(void*), void *arg, int stacksize, int priori
             return P1_DUPLICATE_NAME;
         }
         if (processTable[i].state == P1_STATE_FREE) {
+            USLOSS_Console("PID = %d\n",i);
             *pid = i;
             int cid;
             // create a context using P1ContextCreate
@@ -328,7 +329,8 @@ P1_Quit(int status)
 
 int 
 P1GetChildStatus(int tag, int *pid, int *status) 
-{
+{   
+    int enabled = P1DisableInterrupts();
     // checking if tag is 0 or 1
     if( tag != 0 && tag != 1){
         return P1_INVALID_TAG;
@@ -336,6 +338,10 @@ P1GetChildStatus(int tag, int *pid, int *status)
 
     if(processTable[readyQueue->next->val].childrenPids == NULL){
         return P1_NO_CHILDREN;
+    }
+
+    if(processTable[readyQueue->next->val].status == P1_STATE_BLOCKED){
+        P1Dispatch(FALSE);
     }
 
     Node *childll = processTable[readyQueue->next->val].quitChildren;
@@ -349,6 +355,7 @@ P1GetChildStatus(int tag, int *pid, int *status)
                 int num = childll->val;
                 remove_child(readyQueue->next->val,childll->val);
                 free_procress(num);
+                reEnableInterrupts(enabled);
                 return P1_SUCCESS;
             }
             childll = childll->next;
@@ -356,6 +363,9 @@ P1GetChildStatus(int tag, int *pid, int *status)
     }
     return P1_NO_QUIT;
 }
+
+
+
 
 int
 P1SetState(int pid, P1_State state, int sid) 
@@ -441,7 +451,6 @@ P1Dispatch(int rotate)
         processTable[newNode->val].state = P1_STATE_RUNNING;
         status = USLOSS_DeviceInput(USLOSS_CLOCK_DEV, 0, &(processTable[readyQueue->next->val].startTime));
         int ret = P1ContextSwitch(processTable[newNode->val].cid);
-        // USLOSS_Console("End time\n");
         if (ret != P1_SUCCESS) {
             USLOSS_Halt(1);
         }
