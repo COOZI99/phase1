@@ -12,7 +12,7 @@ Phase 1b
 static void checkInKernelMode();
 static void add_child(int pid);
 static void enqueue(int pid);
-static void printQueue();
+// static void printQueue();
 
 // Implementing a circularly linked list for best queue structure
 typedef struct Node {
@@ -36,12 +36,16 @@ typedef struct PCB {
     int             numQuit;            // The number of children who have quit
     int             sid;
     int             status;
+    int             startTime;
     
 } PCB;
 
 int currentPID = 0;
 static PCB processTable[P1_MAXPROC];   // the process table
 static Node *readyQueue;               // pointer to last item in circular ready queue
+// static int clockTime;
+static int currentCpuTime;
+static int status;
 
 void P1ProcInit(void)
 {
@@ -51,10 +55,11 @@ void P1ProcInit(void)
         processTable[i].cid = 0;
         processTable[i].cpuTime = 0;
         processTable[i].priority = 0;
+        processTable[i].startTime = 0;
         processTable[i].state = P1_STATE_FREE;
     }
     // initialize everything else
-
+    status = USLOSS_DeviceInput(USLOSS_CLOCK_DEV, 0, &currentCpuTime);
 }
 
 // Halting the program for an illegal message
@@ -206,21 +211,21 @@ static void enqueue(int pid){
 //     USLOSS_Console("_______________\n\n");
 // }
 
-void printQueue() 
-{ 
-    struct Node *temp = readyQueue->next; 
-    USLOSS_Console("_______________\n");
-    if (readyQueue != NULL) 
-    { 
-        do
-        { 
-            USLOSS_Console("Current pid %d, Parent pid %d\n",temp->val, processTable[temp->val].parentPid);
-            temp = temp->next; 
-        } 
-        while (temp != readyQueue->next); 
-    } 
-    USLOSS_Console("_______________\n");
-} 
+// void printQueue() 
+// { 
+//     struct Node *temp = readyQueue->next; 
+//     USLOSS_Console("_______________\n");
+//     if (readyQueue != NULL) 
+//     { 
+//         do
+//         { 
+//             USLOSS_Console("Current pid %d, Parent pid %d\n",temp->val, processTable[temp->val].parentPid);
+//             temp = temp->next; 
+//         } 
+//         while (temp != readyQueue->next); 
+//     } 
+//     USLOSS_Console("_______________\n");
+// } 
 
 static void add_child(int pid){
 
@@ -250,7 +255,7 @@ static void add_child(int pid){
 void 
 P1_Quit(int status) 
 {
-    printQueue();
+    // printQueue();
     // check for kernel mode
     checkInKernelMode();
     // disable interrupts
@@ -258,30 +263,32 @@ P1_Quit(int status)
     // remove from ready queue, set status to P1_STATE_QUIT
     Node *currentNode = readyQueue->next;
     int currentPid = currentNode->val;
-    USLOSS_Console("Calling Quits for %d\n", currentPid);
+    // USLOSS_Console("Calling Quits for %d\n", currentPid);
     readyQueue->next = readyQueue->next->next;
+    // printQueue();
     free(currentNode); // Should this be done here or in set state?
     processTable[currentPid].status = status;
-    printQueue();
+    
 
     // printQueue();
-    USLOSS_Console("Calling P1SetState %d\n", currentPid);
+    // USLOSS_Console("Calling P1SetState %d\n", currentPid);
     int retVal = P1SetState(currentPid, P1_STATE_QUIT, 0);
     if (retVal != P1_SUCCESS) {
         USLOSS_Halt(1);
     }
-    USLOSS_Console("Done P1SetState %d\n", currentPid);
+    // USLOSS_Console("Done P1SetState %d\n", currentPid);
     // if first process verify it doesn't have children, otherwise give children to first process
     if (currentPid == 0 && processTable[currentPid].numChildren > processTable[currentPid].numQuit) {
-        USLOSS_Console("First process quitting with children, halting.\n");
+        USLOSS_Console("No runnable processes, halting.\n");
         USLOSS_Halt(1);
+    } else if (currentPid == 0) {
+        USLOSS_Console("No runnable processes, halting.\n");
+        USLOSS_Halt(0);
     }
     if (currentPid > 0 && processTable[currentPid].childrenPids != NULL) {
-        USLOSS_Console("Giving Children of %d to 0\n", currentPid);
         Node *head = processTable[0].childrenPids->next;
         processTable[0].childrenPids->next = processTable[currentPid].childrenPids->next;
         processTable[currentPid].childrenPids->next = head;
-        USLOSS_Console("Finished Swapping\n");
         processTable[0].numChildren += processTable[currentPid].numChildren;
         processTable[0].numQuit += processTable[currentPid].numQuit;
     }
@@ -296,7 +303,6 @@ P1_Quit(int status)
         }
     }
     reEnableInterrupts(enabled);
-    USLOSS_Console("Dispatching next process..\n");
     P1Dispatch(FALSE);
     // should never get here
     assert(0);
@@ -379,14 +385,26 @@ P1SetState(int pid, P1_State state, int sid)
 void
 P1Dispatch(int rotate)
 {
-    USLOSS_Console("Dispatching.................\n");
-    printQueue();
+    // USLOSS_Console("Dispatching.................\n");
+    // printQueue();
+    if (processTable[readyQueue->next->val].startTime == 0) {
+        status = USLOSS_DeviceInput(USLOSS_CLOCK_DEV, 0, &(processTable[readyQueue->next->val].startTime));
+    } else {
+        int endTime;
+        status = USLOSS_DeviceInput(USLOSS_CLOCK_DEV, 0, &(endTime));
+        processTable[readyQueue->next->val].cpuTime += (endTime - processTable[readyQueue->next->val].startTime);
+        processTable[readyQueue->next->val].startTime = 0;
+    }
+    
+    // processTable[readyQueue->next->val].cpuTime += (time - currentCpuTime);
+    processTable[readyQueue->next->val].state = P1_STATE_READY;
+
+    // currentCpuTime = time;
     if (readyQueue->next == readyQueue) {
         // Only one process ready
-        USLOSS_Console("Running Process: %d\n", readyQueue->val);
-        
+        // USLOSS_Console("Running Process: %d\n", readyQueue->val);
+        processTable[readyQueue->val].state = P1_STATE_RUNNING;
         int ret = P1ContextSwitch(processTable[readyQueue->val].cid);
-        USLOSS_Console("Switch success...\n");
         if (ret != P1_SUCCESS) {
             USLOSS_Halt(1);
         }
@@ -401,26 +419,26 @@ P1Dispatch(int rotate)
         }
         ptr = ptr->next;
     }
-    USLOSS_Console("Highest priority  pid %d\n", highestNode->next->val);
-    USLOSS_Console("Current  pid %d\n", readyQueue->next->val);
+    // USLOSS_Console("Current  pid %d\n", readyQueue->next->val);
+    // USLOSS_Console("Newest Priority %d\n", highestNode->next->val);
 
     if (highestNode->next->val != readyQueue->next->val) {
         Node *newNode;
-        if(highestNode == highestNode->next->next){
-            USLOSS_Console("2 nodes \n");
+        if(highestNode->next == readyQueue){
             newNode = readyQueue;
-            readyQueue = readyQueue->next;
+            readyQueue = highestNode;
         }else{
-            USLOSS_Console("many nodes\n");
             // call P1ContextSwitch to switch to that process
             newNode = highestNode->next;
             highestNode->next = highestNode->next->next;
             newNode->next = readyQueue->next;
             readyQueue->next = newNode;
         }
-        printQueue();
+        // printQueue();
         // USLOSS_Console("3 switching, process = %d\n",highestNode->next->val);
+        processTable[newNode->val].state = P1_STATE_RUNNING;
         int ret = P1ContextSwitch(processTable[newNode->val].cid);
+        USLOSS_Console("End time\n");
         if (ret != P1_SUCCESS) {
             USLOSS_Halt(1);
         }
@@ -436,6 +454,7 @@ P1Dispatch(int rotate)
                 ptr->next = ptr->next->next;
                 newNode->next = readyQueue->next;
                 readyQueue->next = newNode;
+                processTable[newNode->val].state = P1_STATE_RUNNING;
                 int ret = P1ContextSwitch(processTable[newNode->val].cid);
                 if (ret != P1_SUCCESS) {
                     USLOSS_Halt(1); // Ask about this later!!!!!!
@@ -446,7 +465,15 @@ P1Dispatch(int rotate)
         }
         // No same priority found, returning current node to head of ready queue
         readyQueue = ptr;
+    } else {
+        processTable[readyQueue->next->val].state = P1_STATE_RUNNING;
+        int ret = P1ContextSwitch(processTable[readyQueue->next->val].cid);
+        if (ret != P1_SUCCESS) {
+            USLOSS_Console("Error Switching Contexts\n");
+            USLOSS_Halt(1); // Ask about this later!!!!!!
+        }
     }
+    
 }
 
 int
