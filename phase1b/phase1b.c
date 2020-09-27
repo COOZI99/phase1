@@ -73,7 +73,7 @@ static void checkInKernelMode() {
 static void launch(void *arg) {
     // int pid = (int) *arg;  FIGURE THIS OUT
     int pid = readyQueue->next->val;
-    USLOSS_Console("Launching process %d\n", pid);
+    // USLOSS_Console("Launching process %d\n", pid);
     // Add a clock for how long this function takes to run
     int retVal = processTable[pid].func(processTable[pid].arg);
     // Stop clock and store value in cpuTime
@@ -234,7 +234,6 @@ static void add_child(int pid){
 void 
 P1_Quit(int status) 
 {
-    USLOSS_Console("Calling Quits\n");
     // check for kernel mode
     checkInKernelMode();
     // disable interrupts
@@ -260,11 +259,9 @@ P1_Quit(int status)
         Node *head = processTable[0].childrenPids->next;
         processTable[0].childrenPids->next = processTable[currentPid].childrenPids->next;
         processTable[currentPid].childrenPids->next = head;
-        USLOSS_Console("Finished Swapping\n");
         processTable[0].numChildren += processTable[currentPid].numChildren;
         processTable[0].numQuit += processTable[currentPid].numQuit;
     }
-    USLOSS_Console("Adding ourselv to our parents quitters\n");
     // add ourself to list of our parent's children that have quit
     processTable[processTable[currentPid].parentPid].numQuit += 1;
     // if parent is in state P1_STATE_JOINING set its state to P1_STATE_READY
@@ -326,7 +323,7 @@ P1Dispatch(int rotate)
 {
     if (readyQueue->next == readyQueue) {
         // Only one process ready
-        USLOSS_Console("Starting first Context: %d with CID: %d\n", readyQueue->val, processTable[readyQueue->val].cid);
+        USLOSS_Console("Running Process: %d\n", readyQueue->val);
         
         int ret = P1ContextSwitch(processTable[readyQueue->val].cid);
         if (ret != P1_SUCCESS) {
