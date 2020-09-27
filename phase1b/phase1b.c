@@ -77,8 +77,7 @@ static void launch(void *arg) {
     // Add a clock for how long this function takes to run
     int retVal = processTable[pid].func(processTable[pid].arg);
     // Stop clock and store value in cpuTime
-    // P1_Quit(retVal);
-    USLOSS_Halt(retVal);
+    P1_Quit(retVal);
 }
 
 int P1_GetPid(void) 
@@ -283,11 +282,7 @@ int
 P1GetChildStatus(int tag, int *pid, int *status) 
 {
     int result = P1_SUCCESS;
-    if (*pid < 0 || P1_MAXPROC <= *pid || processTable[*pid].state == P1_STATE_FREE) {
-        return P1_INVALID_PID;
-    }
     
-    // check all parameters
     // checking if tag is 0 or 1
     if( tag != 0 && tag != 1){
         return P1_INVALID_TAG;
@@ -296,18 +291,30 @@ P1GetChildStatus(int tag, int *pid, int *status)
     if(processTable[readyQueue->val].childrenPids == NULL){
         return P1_NO_CHILDREN;
     }
+
     int quit = 0;
-    Node *childll = processTable[readyQueue->val].childrenPids;
-    while(childll != NULL){
-        if(processTable[childll->val].status == P1_QUIT && processTable[childll->val].tag == tag){
-            *pid = childll->val;
-            *status = P1_Quit;
-            free(childll);
+    Node *childll = processTable[readyQueue->val].childrenPids->next;
+    Node *prev = processTable[readyQueue->val].childrenPids;
+    if(processTable[prev->val].status == P1_STATE_QUIT && processTable[prev->val].tag == tag){
+            *pid = prev->val;
+            *status = P1_STATE_QUIT;
+            free(prev);
+            processTable[readyQueue->val].childrenPids = NULL;
             return P1_SUCCESS;
-        }else if(processTable[childll->val].status == P1_QUIT){
-            quit = 1;
+    }else{
+        while(childll != NULL){
+            if(processTable[childll->val].status == P1_STATE_QUIT && processTable[childll->val].tag == tag){
+                *pid = childll->val;
+                *status = P1_STATE_QUIT;
+                prev->next = childll->next;
+                free(childll);
+                return P1_SUCCESS;
+            }else if(processTable[childll->val].status == P1_STATE_QUIT){
+                quit = 1;
+            }
+            childll = childll->next;
+            prev = prev->next;
         }
-        childll = childll->next;
     }
     if(quit == 0){
         return P1_NO_QUIT;
@@ -365,7 +372,7 @@ P1Dispatch(int rotate)
         }
         ptr = ptr->next;
     }
-    USLOSS_Console("Highest priority  pid %d\n", highestNode->next->val);
+    USLOSS_Console("Running Process: %d\n", highestNode->next->val);
 
     if (highestNode->next != readyQueue->next) {
         // call P1ContextSwitch to switch to that process
