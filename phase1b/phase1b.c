@@ -35,6 +35,7 @@ typedef struct PCB {
     int             numChildren;        // The total number of children
     int             numQuit;            // The number of children who have quit
     int             sid;
+    int             status;
     
 } PCB;
 
@@ -76,7 +77,8 @@ static void launch(void *arg) {
     // Add a clock for how long this function takes to run
     int retVal = processTable[pid].func(processTable[pid].arg);
     // Stop clock and store value in cpuTime
-    P1_Quit(retVal);
+    // P1_Quit(retVal);
+    USLOSS_Halt(retVal);
 }
 
 int P1_GetPid(void) 
@@ -168,11 +170,9 @@ int P1_Fork(char *name, int (*func)(void*), void *arg, int stacksize, int priori
             // if this is the first process or this process's priority is higher than the 
             //    currently running process call P1Dispatch(FALSE)
             // int oldPriority = processTable[currentPID].priority;
-            // if(priority < oldPriority){
             currentPID = i;
             USLOSS_Console("Dispatching...\n");
             P1Dispatch(FALSE);
-            // }
             reEnableInterrupts(val);
             return P1_SUCCESS;
         }
@@ -240,8 +240,10 @@ P1_Quit(int status)
     // remove from ready queue, set status to P1_STATE_QUIT
     Node *currentNode = readyQueue->next;
     int currentPid = currentNode->val;
+    USLOSS_Console("Calling Quits for %d\n", currentPid);
     readyQueue->next = readyQueue->next->next;
     free(currentNode); // Should this be done here or in set state?
+    processTable[currentPid].status = status;
     int retVal = P1SetState(currentPid, P1_STATE_QUIT, 0);
     if (retVal != P1_SUCCESS) {
         USLOSS_Halt(1);
@@ -251,14 +253,16 @@ P1_Quit(int status)
         USLOSS_Console("First process quitting with children, halting.\n");
         USLOSS_Halt(1);
     }
-    if (currentPid > 0) {
+    if (currentPid > 0 && processTable[currentPid].childrenPids != NULL) {
         USLOSS_Console("Giving Children of %d to 0\n", currentPid);
         Node *head = processTable[0].childrenPids->next;
         processTable[0].childrenPids->next = processTable[currentPid].childrenPids->next;
         processTable[currentPid].childrenPids->next = head;
+        USLOSS_Console("Finished Swapping\n");
         processTable[0].numChildren += processTable[currentPid].numChildren;
         processTable[0].numQuit += processTable[currentPid].numQuit;
     }
+    USLOSS_Console("Adding ourselv to our parents quitters\n");
     // add ourself to list of our parent's children that have quit
     processTable[processTable[currentPid].parentPid].numQuit += 1;
     // if parent is in state P1_STATE_JOINING set its state to P1_STATE_READY
@@ -269,6 +273,7 @@ P1_Quit(int status)
         }
     }
     reEnableInterrupts(enabled);
+    USLOSS_Console("Dispatching next process..\n");
     P1Dispatch(FALSE);
     // should never get here
     assert(0);
@@ -283,6 +288,31 @@ P1GetChildStatus(int tag, int *pid, int *status)
         return P1_INVALID_PID;
     }
     
+    // check all parameters
+    // checking if tag is 0 or 1
+    if( tag != 0 && tag != 1){
+        return P1_INVALID_TAG;
+    }
+
+    if(processTable[readyQueue->val].childrenPids == NULL){
+        return P1_NO_CHILDREN;
+    }
+    int quit = 0;
+    Node *childll = processTable[readyQueue->val].childrenPids;
+    while(childll != NULL){
+        if(processTable[childll->val].status == P1_QUIT && processTable[childll->val].tag == tag){
+            *pid = childll->val;
+            *status = P1_Quit;
+            free(childll);
+            return P1_SUCCESS;
+        }else if(processTable[childll->val].status == P1_QUIT){
+            quit = 1;
+        }
+        childll = childll->next;
+    }
+    if(quit == 0){
+        return P1_NO_QUIT;
+    }
     return result;
 }
 
@@ -319,9 +349,11 @@ P1Dispatch(int rotate)
 {
     if (readyQueue->next == readyQueue) {
         // Only one process ready
+        USLOSS_Console("Starting first Context: %d with CID: %d\n", readyQueue->val, processTable[readyQueue->val].cid);
         
         int ret = P1ContextSwitch(processTable[readyQueue->val].cid);
         if (ret != P1_SUCCESS) {
+            USLOSS_Console("Switch Failed, Halting...\n");
             USLOSS_Halt(1);
         }
     }
