@@ -170,11 +170,9 @@ int P1_Fork(char *name, int (*func)(void*), void *arg, int stacksize, int priori
             // if this is the first process or this process's priority is higher than the 
             //    currently running process call P1Dispatch(FALSE)
             // int oldPriority = processTable[currentPID].priority;
-            // if(priority < oldPriority){
             currentPID = i;
             USLOSS_Console("Dispatching...\n");
             P1Dispatch(FALSE);
-            // }
             reEnableInterrupts(val);
             return P1_SUCCESS;
         }
@@ -259,9 +257,11 @@ P1_Quit(int status)
         Node *head = processTable[0].childrenPids->next;
         processTable[0].childrenPids->next = processTable[currentPid].childrenPids->next;
         processTable[currentPid].childrenPids->next = head;
+        USLOSS_Console("Finished Swapping\n");
         processTable[0].numChildren += processTable[currentPid].numChildren;
         processTable[0].numQuit += processTable[currentPid].numQuit;
     }
+    USLOSS_Console("Adding ourselv to our parents quitters\n");
     // add ourself to list of our parent's children that have quit
     processTable[processTable[currentPid].parentPid].numQuit += 1;
     // if parent is in state P1_STATE_JOINING set its state to P1_STATE_READY
@@ -287,6 +287,31 @@ P1GetChildStatus(int tag, int *pid, int *status)
         return P1_INVALID_PID;
     }
     
+    // check all parameters
+    // checking if tag is 0 or 1
+    if( tag != 0 && tag != 1){
+        return P1_INVALID_TAG;
+    }
+
+    if(processTable[readyQueue->val].childrenPids == NULL){
+        return P1_NO_CHILDREN;
+    }
+    int quit = 0;
+    Node *childll = processTable[readyQueue->val].childrenPids;
+    while(childll != NULL){
+        if(processTable[childll->val].status == P1_QUIT && processTable[childll->val].tag == tag){
+            *pid = childll->val;
+            *status = P1_Quit;
+            free(childll);
+            return P1_SUCCESS;
+        }else if(processTable[childll->val].status == P1_QUIT){
+            quit = 1;
+        }
+        childll = childll->next;
+    }
+    if(quit == 0){
+        return P1_NO_QUIT;
+    }
     return result;
 }
 
