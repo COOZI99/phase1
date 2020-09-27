@@ -3,5 +3,6 @@
 *.out
 *.a
 phase1b/tests/*
+phase1b/tests/test*
 phase1a/tests/test*
 phase1a/workspace*
