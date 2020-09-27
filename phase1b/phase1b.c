@@ -41,6 +41,7 @@ typedef struct PCB {
     int             numQuit;            // The number of children who have quit
     int             sid;
     int             status;
+    int             startTime;
     
 } PCB;
 
@@ -264,23 +265,23 @@ P1_Quit(int status)
         temp->next = new_node;
     }
 
-    // USLOSS_Console("Calling P1SetState %d\n", currentPid);
-    int retVal = P1SetState(currentPid, P1_STATE_QUIT, 0);
+     int retVal = P1SetState(currentPid, P1_STATE_QUIT, 0);
     if (retVal != P1_SUCCESS) {
         USLOSS_Halt(1);
     }
     // USLOSS_Console("Done P1SetState %d\n", currentPid);
     // if first process verify it doesn't have children, otherwise give children to first process
     if (currentPid == 0 && processTable[currentPid].numChildren > processTable[currentPid].numQuit) {
-        USLOSS_Console("First process quitting with children, halting.\n");
+        USLOSS_Console("No runnable processes, halting.\n");
         USLOSS_Halt(1);
+    } else if (currentPid == 0) {
+        USLOSS_Console("No runnable processes, halting.\n");
+        USLOSS_Halt(0);
     }
     if (currentPid > 0 && processTable[currentPid].childrenPids != NULL) {
-        USLOSS_Console("Giving Children of %d to 0\n", currentPid);
         Node *head = processTable[0].childrenPids->next;
         processTable[0].childrenPids->next = processTable[currentPid].childrenPids->next;
         processTable[currentPid].childrenPids->next = head;
-        USLOSS_Console("Finished Swapping\n");
         processTable[0].numChildren += processTable[currentPid].numChildren;
         processTable[0].numQuit += processTable[currentPid].numQuit;
     }
@@ -428,9 +429,25 @@ P1SetState(int pid, P1_State state, int sid)
 void
 P1Dispatch(int rotate)
 {
+    // USLOSS_Console("Dispatching.................\n");
+    // printQueue();
+    if (processTable[readyQueue->next->val].startTime == 0) {
+        int status = USLOSS_DeviceInput(USLOSS_CLOCK_DEV, 0, &(processTable[readyQueue->next->val].startTime));
+    } else {
+        int endTime;
+        int status = USLOSS_DeviceInput(USLOSS_CLOCK_DEV, 0, &(endTime));
+        processTable[readyQueue->next->val].cpuTime += (endTime - processTable[readyQueue->next->val].startTime);
+        processTable[readyQueue->next->val].startTime = 0;
+    }
+    
+    // processTable[readyQueue->next->val].cpuTime += (time - currentCpuTime);
+    processTable[readyQueue->next->val].state = P1_STATE_READY;
+
+    // currentCpuTime = time;
     if (readyQueue->next == readyQueue) {
         // Only one process ready
-        // USLOSS_Console("Starting first Context: %d with CID: %d\n", readyQueue->val, processTable[readyQueue->val].cid);
+        // USLOSS_Console("Running Process: %d\n", readyQueue->val);
+        processTable[readyQueue->val].state = P1_STATE_RUNNING;
         int ret = P1ContextSwitch(processTable[readyQueue->val].cid);
         if (ret != P1_SUCCESS) {
             USLOSS_Halt(1);
@@ -446,14 +463,14 @@ P1Dispatch(int rotate)
         }
         ptr = ptr->next;
     }
-    // USLOSS_Console("Highest priority  pid %d\n", highestNode->next->val);
     // USLOSS_Console("Current  pid %d\n", readyQueue->next->val);
+    // USLOSS_Console("Newest Priority %d\n", highestNode->next->val);
 
     if (highestNode->next->val != readyQueue->next->val) {
         Node *newNode;
-        if(highestNode == highestNode->next->next){
+        if(highestNode->next == readyQueue){
             newNode = readyQueue;
-            readyQueue = readyQueue->next;
+            readyQueue = highestNode;
         }else{
             // call P1ContextSwitch to switch to that process
             newNode = highestNode->next;
@@ -461,8 +478,11 @@ P1Dispatch(int rotate)
             newNode->next = readyQueue->next;
             readyQueue->next = newNode;
         }
+        // printQueue();
         // USLOSS_Console("3 switching, process = %d\n",highestNode->next->val);
+        processTable[newNode->val].state = P1_STATE_RUNNING;
         int ret = P1ContextSwitch(processTable[newNode->val].cid);
+        USLOSS_Console("End time\n");
         if (ret != P1_SUCCESS) {
             USLOSS_Halt(1);
         }
@@ -478,6 +498,7 @@ P1Dispatch(int rotate)
                 ptr->next = ptr->next->next;
                 newNode->next = readyQueue->next;
                 readyQueue->next = newNode;
+                processTable[newNode->val].state = P1_STATE_RUNNING;
                 int ret = P1ContextSwitch(processTable[newNode->val].cid);
                 if (ret != P1_SUCCESS) {
                     USLOSS_Halt(1); // Ask about this later!!!!!!
@@ -488,7 +509,15 @@ P1Dispatch(int rotate)
         }
         // No same priority found, returning current node to head of ready queue
         readyQueue = ptr;
+    } else {
+        processTable[readyQueue->next->val].state = P1_STATE_RUNNING;
+        int ret = P1ContextSwitch(processTable[readyQueue->next->val].cid);
+        if (ret != P1_SUCCESS) {
+            USLOSS_Console("Error Switching Contexts\n");
+            USLOSS_Halt(1); // Ask about this later!!!!!!
+        }
     }
+    
 }
 
 int
