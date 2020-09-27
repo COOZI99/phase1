@@ -12,6 +12,7 @@ Phase 1b
 static void checkInKernelMode();
 static void add_child(int pid);
 static void enqueue(int pid);
+// static void printQueue();
 
 // Implementing a circularly linked list for best queue structure
 typedef struct Node {
@@ -196,25 +197,44 @@ static void enqueue(int pid){
     }
 }
 
+// static void printQueue(){
+//     Node *queue = readyQueue;
+//     int val = queue->val;
+//     do{
+//         printf("Current pid %d, Parent pid %d\n",queue->val, processTable[queue->val].parentPid);
+//         queue = queue->next;
+//     }while(val != queue->val);
+// }
+
 static void add_child(int pid){
-    int currentpid = currentPID;
-    do {
-        Node *new_child =  (Node*)malloc(sizeof(Node)); 
-        new_child->val = pid;
-        if(processTable[currentpid].childrenPids == NULL){
-            new_child->next = new_child;
-        } else{
-            new_child->next = processTable[currentpid].childrenPids->next;
-            processTable[currentpid].childrenPids->next = new_child;
-            processTable[currentpid].numChildren ++;
-        }
-        currentpid = processTable[currentpid].parentPid;
-    } while(currentpid != 0);
+
+    int currentpid = readyQueue->next->val;
+    Node *new_child = (Node*)malloc(sizeof(Node)); 
+    new_child->val = pid;
+    new_child->next = NULL;
+    processTable[currentpid].childrenPids = new_child;
+    processTable[currentpid].numChildren ++;
+    //  USLOSS_Console("currentpid = %d \n", currentpid);
+    // do {
+    //     Node *new_child =  (Node*)malloc(sizeof(Node)); 
+    //     new_child->val = pid;
+    //     if(processTable[currentpid].childrenPids == NULL){
+    //         new_child->next = new_child;
+    //     } else{
+    //         new_child->next = processTable[currentpid].childrenPids->next;
+    //         processTable[currentpid].childrenPids->next = new_child;
+    //         processTable[currentpid].childrenPids = processTable[currentpid].childrenPids->next;
+    //         processTable[currentpid].numChildren ++;
+    //     }
+    //     currentpid = processTable[currentpid].parentPid;
+    // } while(currentpid != 0);
+
 }
 
 void 
 P1_Quit(int status) 
 {
+    USLOSS_Console("Calling Quits\n");
     // check for kernel mode
     checkInKernelMode();
     // disable interrupts
@@ -266,9 +286,9 @@ int
 P1GetChildStatus(int tag, int *pid, int *status) 
 {
     int result = P1_SUCCESS;
-    // if (pid < 0 || P1_MAXPROC <= pid || processTable[pid].state == P1_STATE_FREE) {
-    //     return P1_INVALID_PID;
-    // }
+    if (*pid < 0 || P1_MAXPROC <= *pid || processTable[*pid].state == P1_STATE_FREE) {
+        return P1_INVALID_PID;
+    }
     
     return result;
 }
@@ -366,7 +386,7 @@ P1_GetProcInfo(int pid, P1_ProcInfo *info)
     if (pid < 0 || P1_MAXPROC <= pid || processTable[pid].state == P1_STATE_FREE) {
         return P1_INVALID_PID;
     }
-    // strcmp(info->name,processTable[pid].name);
+    strcpy(info->name,processTable[pid].name);
     info->sid = processTable[pid].sid;
     info->state = processTable[pid].state;
     info->priority = processTable[pid].priority;
