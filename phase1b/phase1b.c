@@ -46,7 +46,7 @@ typedef struct PCB {
 
 static PCB processTable[P1_MAXPROC];   // the process table
 static Node *readyQueue;               // pointer to last item in circular ready queue
-static int status;
+static int clockStatus;
 
 ///////////////////////////////////////////////////////////////////////////////
 // Helper Functions
@@ -65,7 +65,6 @@ static void checkInKernelMode() {
 static void launch(void *arg) {
     // int pid = (int) *arg;  FIGURE THIS OUT
     int pid = readyQueue->next->val;
-    // USLOSS_Console("Launching process %d\n", pid);
     // Add a clock for how long this function takes to run
     int retVal = processTable[pid].func(processTable[pid].arg);
     // Stop clock and store value in cpuTime
@@ -106,7 +105,7 @@ static void add_child(int pid){
         }
         head->next = new_child;
     }
-    processTable[currentpid].numChildren ++;
+    processTable[currentpid].numChildren++;
 }
 
 void free_procress(int pid){
@@ -181,7 +180,6 @@ void P1ProcInit(void)
         processTable[i].state = P1_STATE_FREE;
     }
     // initialize everything else
-    status = USLOSS_DeviceInput(USLOSS_CLOCK_DEV, 0, &currentCpuTime);
 }
 
 int P1_GetPid(void) 
@@ -222,7 +220,6 @@ int P1_Fork(char *name, int (*func)(void*), void *arg, int stacksize, int priori
             return P1_DUPLICATE_NAME;
         }
         if (processTable[i].state == P1_STATE_FREE) {
-            USLOSS_Console("PID = %d\n",i);
             *pid = i;
             int cid;
             // create a context using P1ContextCreate
@@ -249,7 +246,6 @@ int P1_Fork(char *name, int (*func)(void*), void *arg, int stacksize, int priori
             if(i == 0 && priority != 6){
                 return P1_INVALID_PRIORITY;
             }else if (i != 0){
-                // USLOSS_Console("Adding Child %d to %d\n", i, processTable[i].parentPid);
                 add_child(i);
             }
             P1Dispatch(FALSE);
@@ -267,13 +263,12 @@ P1_Quit(int status)
     checkInKernelMode();  // check for kernel mode
     int enabled = P1DisableInterrupts(); // disable interrupts
     int endTime;
-    status = USLOSS_DeviceInput(USLOSS_CLOCK_DEV, 0, &(endTime));
+    clockStatus = USLOSS_DeviceInput(USLOSS_CLOCK_DEV, 0, &(endTime));
     processTable[readyQueue->next->val].cpuTime += (endTime - processTable[readyQueue->next->val].startTime);
 
     // remove from ready queue, set status to P1_STATE_QUIT
     Node *currentNode = readyQueue->next;
     int currentPid = currentNode->val;
-    // USLOSS_Console("Calling Quits for %d\n", currentPid);
     readyQueue->next = readyQueue->next->next;
     free(currentNode); // Should this be done here or in set state?
     processTable[currentPid].status = status;
@@ -295,7 +290,6 @@ P1_Quit(int status)
     if (retVal != P1_SUCCESS) {
         USLOSS_Halt(1);
     }
-    // USLOSS_Console("Done P1SetState %d\n", currentPid);
     // if first process verify it doesn't have children, otherwise give children to first process
     if (currentPid == 0 && processTable[currentPid].numChildren > processTable[currentPid].numQuit) {
         USLOSS_Console("No runnable processes, halting.\n");
@@ -311,7 +305,6 @@ P1_Quit(int status)
         processTable[0].numChildren += processTable[currentPid].numChildren;
         processTable[0].numQuit += processTable[currentPid].numQuit;
     }
-    // USLOSS_Console("Adding ourselv to our parents quitters\n");
     // add ourself to list of our parent's children that have quit
     processTable[processTable[currentPid].parentPid].numQuit += 1;
     // if parent is in state P1_STATE_JOINING set its state to P1_STATE_READY
@@ -340,7 +333,7 @@ P1GetChildStatus(int tag, int *pid, int *status)
         return P1_NO_CHILDREN;
     }
 
-    if(processTable[readyQueue->next->val].status == P1_STATE_BLOCKED){
+    if(processTable[readyQueue->next->val].state == P1_STATE_BLOCKED){
         P1Dispatch(FALSE);
     }
 
@@ -363,9 +356,6 @@ P1GetChildStatus(int tag, int *pid, int *status)
     }
     return P1_NO_QUIT;
 }
-
-
-
 
 int
 P1SetState(int pid, P1_State state, int sid) 
@@ -399,10 +389,10 @@ void
 P1Dispatch(int rotate)
 {
     if (processTable[readyQueue->next->val].startTime == 0) {
-        status = USLOSS_DeviceInput(USLOSS_CLOCK_DEV, 0, &(processTable[readyQueue->next->val].startTime));
+        clockStatus = USLOSS_DeviceInput(USLOSS_CLOCK_DEV, 0, &(processTable[readyQueue->next->val].startTime));
     } else {
         int endTime;
-        status = USLOSS_DeviceInput(USLOSS_CLOCK_DEV, 0, &(endTime));
+        clockStatus = USLOSS_DeviceInput(USLOSS_CLOCK_DEV, 0, &(endTime));
         processTable[readyQueue->next->val].cpuTime += (endTime - processTable[readyQueue->next->val].startTime);
         processTable[readyQueue->next->val].startTime = 0;
     }
@@ -413,9 +403,8 @@ P1Dispatch(int rotate)
     // currentCpuTime = time;
     if (readyQueue->next == readyQueue) {
         // Only one process ready
-        // USLOSS_Console("Running Process: %d\n", readyQueue->val);
         processTable[readyQueue->val].state = P1_STATE_RUNNING;
-        status = USLOSS_DeviceInput(USLOSS_CLOCK_DEV, 0, &(processTable[readyQueue->next->val].startTime));
+        clockStatus = USLOSS_DeviceInput(USLOSS_CLOCK_DEV, 0, &(processTable[readyQueue->next->val].startTime));
         int ret = P1ContextSwitch(processTable[readyQueue->val].cid);
         if (ret != P1_SUCCESS) {
             USLOSS_Halt(1);
@@ -431,8 +420,6 @@ P1Dispatch(int rotate)
         }
         ptr = ptr->next;
     }
-    // USLOSS_Console("Current  pid %d\n", readyQueue->next->val);
-    // USLOSS_Console("Newest Priority %d\n", highestNode->next->val);
 
     if (highestNode->next->val != readyQueue->next->val) {
         Node *newNode;
@@ -446,10 +433,8 @@ P1Dispatch(int rotate)
             newNode->next = readyQueue->next;
             readyQueue->next = newNode;
         }
-        // printQueue();
-        // USLOSS_Console("3 switching, process = %d\n",highestNode->next->val);
         processTable[newNode->val].state = P1_STATE_RUNNING;
-        status = USLOSS_DeviceInput(USLOSS_CLOCK_DEV, 0, &(processTable[readyQueue->next->val].startTime));
+        clockStatus = USLOSS_DeviceInput(USLOSS_CLOCK_DEV, 0, &(processTable[readyQueue->next->val].startTime));
         int ret = P1ContextSwitch(processTable[newNode->val].cid);
         if (ret != P1_SUCCESS) {
             USLOSS_Halt(1);
@@ -467,7 +452,7 @@ P1Dispatch(int rotate)
                 newNode->next = readyQueue->next;
                 readyQueue->next = newNode;
                 processTable[newNode->val].state = P1_STATE_RUNNING;
-                status = USLOSS_DeviceInput(USLOSS_CLOCK_DEV, 0, &(processTable[readyQueue->next->val].startTime));
+                clockStatus = USLOSS_DeviceInput(USLOSS_CLOCK_DEV, 0, &(processTable[readyQueue->next->val].startTime));
                 int ret = P1ContextSwitch(processTable[newNode->val].cid);
                 if (ret != P1_SUCCESS) {
                     USLOSS_Halt(1); // Ask about this later!!!!!!
@@ -480,12 +465,9 @@ P1Dispatch(int rotate)
         readyQueue = ptr;
     } else {
         processTable[readyQueue->next->val].state = P1_STATE_RUNNING;
-        status = USLOSS_DeviceInput(USLOSS_CLOCK_DEV, 0, &(processTable[readyQueue->next->val].startTime));
+        clockStatus = USLOSS_DeviceInput(USLOSS_CLOCK_DEV, 0, &(processTable[readyQueue->next->val].startTime));
         int ret = P1ContextSwitch(processTable[readyQueue->next->val].cid);
-        if (ret != P1_SUCCESS) {
-            USLOSS_Console("Error Switching Contexts\n");
-            USLOSS_Halt(1); // Ask about this later!!!!!!
-        }
+        assert(ret == 0);
     }
     
 }
