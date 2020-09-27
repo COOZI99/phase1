@@ -9,16 +9,20 @@ Phase 1b
 #include <assert.h>
 #include <stdio.h>
 
-static void checkInKernelMode();
-static void add_child(int pid);
-static void enqueue(int pid);
-static void printQueue();
-
 // Implementing a circularly linked list for best queue structure
 typedef struct Node {
     int          val;
     struct Node* next;
 } Node;
+
+static void checkInKernelMode();
+static void add_child(int pid);
+static void enqueue(int pid);
+// static void printQueue();
+void printing(Node *head);
+// void inheritList(int parent, int child);
+void free_procress(int pid);
+void remove_child(int parent, int child);
 
 typedef struct PCB {
     int             cid;                // context's ID
@@ -32,6 +36,7 @@ typedef struct PCB {
     void            *arg;
     int             parentPid;          // The process ID of the parent
     Node            *childrenPids;      // The children process IDs of the process
+    Node            *quitChildren;       // The children that quitted
     int             numChildren;        // The total number of children
     int             numQuit;            // The number of children who have quit
     int             sid;
@@ -39,7 +44,6 @@ typedef struct PCB {
     
 } PCB;
 
-int currentPID = 0;
 static PCB processTable[P1_MAXPROC];   // the process table
 static Node *readyQueue;               // pointer to last item in circular ready queue
 
@@ -160,6 +164,7 @@ int P1_Fork(char *name, int (*func)(void*), void *arg, int stacksize, int priori
             processTable[i].numChildren = 0;
             processTable[i].func = func;
             processTable[i].arg = arg;
+            processTable[i].quitChildren = NULL;
             // Setting the first fork
             if(i == 0 && priority != 6){
                 return P1_INVALID_PRIORITY;
@@ -170,7 +175,6 @@ int P1_Fork(char *name, int (*func)(void*), void *arg, int stacksize, int priori
             // if this is the first process or this process's priority is higher than the 
             //    currently running process call P1Dispatch(FALSE)
             // int oldPriority = processTable[currentPID].priority;
-            currentPID = i;
             // printQueue();
             P1Dispatch(FALSE);
             reEnableInterrupts(val);
@@ -193,35 +197,24 @@ static void enqueue(int pid){
         readyQueue->next = node;
         readyQueue = readyQueue->next;
     }
-    // printQueue();
 }
 
-// static void printQueue(){
-//     USLOSS_Console("_______________\n");
-//     Node *queue = readyQueue;
-//     int val = queue->val;
-//     do{
-//         USLOSS_Console("Current pid %d, Parent pid %d\n",queue->val, processTable[queue->val].parentPid);
-//         queue = queue->next;
-//     }while(val != queue->val);
-//     USLOSS_Console("_______________\n\n");
-// }
 
-void printQueue() 
-{ 
-    struct Node *temp = readyQueue->next; 
-    USLOSS_Console("_______________\n");
-    if (readyQueue != NULL) 
-    { 
-        do
-        { 
-            USLOSS_Console("Current pid %d, Parent pid %d\n",temp->val, processTable[temp->val].parentPid);
-            temp = temp->next; 
-        } 
-        while (temp != readyQueue->next); 
-    } 
-    USLOSS_Console("_______________\n");
-} 
+// void printQueue() 
+// { 
+//     struct Node *temp = readyQueue->next; 
+//     USLOSS_Console("_______________\n");
+//     if (readyQueue != NULL) 
+//     { 
+//         do
+//         { 
+//             USLOSS_Console("Current pid %d, Parent pid %d\n",temp->val, processTable[temp->val].parentPid);
+//             temp = temp->next; 
+//         } 
+//         while (temp != readyQueue->next); 
+//     } 
+//     USLOSS_Console("_______________\n");
+// } 
 
 static void add_child(int pid){
 
@@ -229,29 +222,23 @@ static void add_child(int pid){
     Node *new_child = (Node*)malloc(sizeof(Node)); 
     new_child->val = pid;
     new_child->next = NULL;
-    processTable[currentpid].childrenPids = new_child;
+    Node *head = processTable[readyQueue->next->val].childrenPids;
+    if(head == NULL){
+        processTable[readyQueue->next->val].childrenPids = new_child;
+    }else{
+        while(head->next != NULL){
+            head = head->next;
+        }
+        head->next = new_child;
+    }
     processTable[currentpid].numChildren ++;
-    //  USLOSS_Console("currentpid = %d \n", currentpid);
-    // do {
-    //     Node *new_child =  (Node*)malloc(sizeof(Node)); 
-    //     new_child->val = pid;
-    //     if(processTable[currentpid].childrenPids == NULL){
-    //         new_child->next = new_child;
-    //     } else{
-    //         new_child->next = processTable[currentpid].childrenPids->next;
-    //         processTable[currentpid].childrenPids->next = new_child;
-    //         processTable[currentpid].childrenPids = processTable[currentpid].childrenPids->next;
-    //         processTable[currentpid].numChildren ++;
-    //     }
-    //     currentpid = processTable[currentpid].parentPid;
-    // } while(currentpid != 0);
 
 }
 
 void 
 P1_Quit(int status) 
 {
-    printQueue();
+
     // check for kernel mode
     checkInKernelMode();
     // disable interrupts
@@ -259,19 +246,30 @@ P1_Quit(int status)
     // remove from ready queue, set status to P1_STATE_QUIT
     Node *currentNode = readyQueue->next;
     int currentPid = currentNode->val;
-    USLOSS_Console("Calling Quits for %d\n", currentPid);
+    // USLOSS_Console("Calling Quits for %d\n", currentPid);
     readyQueue->next = readyQueue->next->next;
     free(currentNode); // Should this be done here or in set state?
     processTable[currentPid].status = status;
-    printQueue();
+    int parent = processTable[currentPid].parentPid;
+    Node *new_node = (Node*)malloc(sizeof(Node));
+    new_node->val = currentPid;
+    new_node->next = NULL;
+    if(processTable[parent].quitChildren == NULL){
+        processTable[parent].quitChildren = new_node;
+    }else{
+        Node *temp = processTable[parent].quitChildren;
+        while(temp->next != NULL){
+            temp = temp->next;
+        }
+        temp->next = new_node;
+    }
 
-    // printQueue();
-    USLOSS_Console("Calling P1SetState %d\n", currentPid);
+    // USLOSS_Console("Calling P1SetState %d\n", currentPid);
     int retVal = P1SetState(currentPid, P1_STATE_QUIT, 0);
     if (retVal != P1_SUCCESS) {
         USLOSS_Halt(1);
     }
-    USLOSS_Console("Done P1SetState %d\n", currentPid);
+    // USLOSS_Console("Done P1SetState %d\n", currentPid);
     // if first process verify it doesn't have children, otherwise give children to first process
     if (currentPid == 0 && processTable[currentPid].numChildren > processTable[currentPid].numQuit) {
         USLOSS_Console("First process quitting with children, halting.\n");
@@ -297,7 +295,6 @@ P1_Quit(int status)
         }
     }
     reEnableInterrupts(enabled);
-    USLOSS_Console("Dispatching next process..\n");
     P1Dispatch(FALSE);
     // should never get here
     assert(0);
@@ -307,9 +304,6 @@ P1_Quit(int status)
 int 
 P1GetChildStatus(int tag, int *pid, int *status) 
 {
-    // USLOSS_Console("Get Child Status");
-    int result = P1_SUCCESS;
-    
     // checking if tag is 0 or 1
     if( tag != 0 && tag != 1){
         return P1_INVALID_TAG;
@@ -319,35 +313,89 @@ P1GetChildStatus(int tag, int *pid, int *status)
         return P1_NO_CHILDREN;
     }
 
-    int quit = 0;
-    Node *childll = processTable[readyQueue->next->val].childrenPids->next;
-    Node *prev = processTable[readyQueue->next->val].childrenPids;
-    if(processTable[prev->val].status == P1_STATE_QUIT && processTable[prev->val].tag == tag){
-            *pid = prev->val;
-            *status = P1_STATE_QUIT;
-            free(prev);
-            processTable[readyQueue->next->val].childrenPids = NULL;
-            return P1_SUCCESS;
+    Node *childll = processTable[readyQueue->next->val].quitChildren;
+    if(childll == NULL){
+        return P1_NO_QUIT;
     }else{
         while(childll != NULL){
-            if(processTable[childll->val].status == P1_STATE_QUIT && processTable[childll->val].tag == tag){
+            if(processTable[childll->val].tag == tag){
                 *pid = childll->val;
-                *status = P1_STATE_QUIT;
-                prev->next = childll->next;
-                free(childll);
+                *status = processTable[childll->val].status;
+                int num = childll->val;
+                remove_child(readyQueue->next->val,childll->val);
+                free_procress(num);
                 return P1_SUCCESS;
-            }else if(processTable[childll->val].status == P1_STATE_QUIT){
-                quit = 1;
             }
             childll = childll->next;
-            prev = prev->next;
         }
     }
-    if(quit == 0){
-        return P1_NO_QUIT;
-    }
-    return result;
+    return P1_NO_QUIT;
 }
+
+void free_procress(int pid){
+    Node *headC = processTable[pid].childrenPids;
+    while(headC != NULL){
+        Node *temp = headC;
+        headC = headC->next;
+        free(temp);
+    }
+
+    Node *headQ = processTable[pid].quitChildren;
+    while(headQ != NULL){
+        Node *temp = headQ;
+        headQ = headQ->next;
+        free(temp);
+    }
+    processTable[pid].state = P1_STATE_FREE;
+}
+
+void remove_child(int parent, int child){
+    Node *headChildren = processTable[parent].childrenPids;
+
+    if(headChildren->val == child){
+        Node *temp = processTable[parent].childrenPids;
+        processTable[parent].childrenPids = processTable[parent].childrenPids->next;
+        free(temp);
+    }else{
+        while(headChildren != NULL && headChildren->next != NULL){
+            if(headChildren->next->val == child){
+                headChildren->next = headChildren->next->next;
+                break;
+            }
+            headChildren = headChildren->next;
+        }
+    }
+
+    Node *headQuit = processTable[parent].quitChildren;
+
+    if(headQuit->val == child){
+        Node *temp = processTable[parent].quitChildren;
+        processTable[parent].quitChildren = processTable[parent].quitChildren->next;
+        free(temp);
+    }else{
+        while(headQuit != NULL && headQuit->next != NULL){
+            if(headChildren->next->val == child){
+                headQuit->next = headQuit->next->next;
+                break;
+            }
+            headQuit = headQuit->next;
+        }
+    }
+
+    processTable[parent].numChildren --;
+    processTable[parent].numQuit --;
+
+}
+
+void printing(Node *head){
+    USLOSS_Console("_______________\n");
+    while(head != NULL){
+        USLOSS_Console("CHILD IS %d\n",head->val);
+        head = head->next;
+    }
+    USLOSS_Console("_______________\n");
+}
+
 
 int
 P1SetState(int pid, P1_State state, int sid) 
@@ -380,13 +428,10 @@ P1SetState(int pid, P1_State state, int sid)
 void
 P1Dispatch(int rotate)
 {
-    USLOSS_Console("Dispatching.................\n");
-    printQueue();
     if (readyQueue->next == readyQueue) {
         // Only one process ready
-        USLOSS_Console("Starting first Context: %d with CID: %d\n", readyQueue->val, processTable[readyQueue->val].cid);
+        // USLOSS_Console("Starting first Context: %d with CID: %d\n", readyQueue->val, processTable[readyQueue->val].cid);
         int ret = P1ContextSwitch(processTable[readyQueue->val].cid);
-        USLOSS_Console("Switch success...\n");
         if (ret != P1_SUCCESS) {
             USLOSS_Halt(1);
         }
@@ -401,24 +446,21 @@ P1Dispatch(int rotate)
         }
         ptr = ptr->next;
     }
-    USLOSS_Console("Highest priority  pid %d\n", highestNode->next->val);
-    USLOSS_Console("Current  pid %d\n", readyQueue->next->val);
+    // USLOSS_Console("Highest priority  pid %d\n", highestNode->next->val);
+    // USLOSS_Console("Current  pid %d\n", readyQueue->next->val);
 
     if (highestNode->next->val != readyQueue->next->val) {
         Node *newNode;
         if(highestNode == highestNode->next->next){
-            USLOSS_Console("2 nodes \n");
             newNode = readyQueue;
             readyQueue = readyQueue->next;
         }else{
-            USLOSS_Console("many nodes\n");
             // call P1ContextSwitch to switch to that process
             newNode = highestNode->next;
             highestNode->next = highestNode->next->next;
             newNode->next = readyQueue->next;
             readyQueue->next = newNode;
         }
-        printQueue();
         // USLOSS_Console("3 switching, process = %d\n",highestNode->next->val);
         int ret = P1ContextSwitch(processTable[newNode->val].cid);
         if (ret != P1_SUCCESS) {
