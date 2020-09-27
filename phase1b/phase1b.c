@@ -197,7 +197,6 @@ static void enqueue(int pid){
 }
 
 static void add_child(int pid){
-
     int currentpid = currentPID;
     do {
         Node *new_child =  (Node*)malloc(sizeof(Node)); 
@@ -211,13 +210,11 @@ static void add_child(int pid){
         }
         currentpid = processTable[currentpid].parentPid;
     } while(currentpid != 0);
-
 }
 
 void 
 P1_Quit(int status) 
 {
-    
     // check for kernel mode
     checkInKernelMode();
     // disable interrupts
