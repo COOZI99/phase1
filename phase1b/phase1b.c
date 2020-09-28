@@ -453,8 +453,6 @@ P1Dispatch(int rotate)
         }
         ptr = ptr->next;
     }
-    // USLOSS_Console("Current  pid %d\n", readyQueue->next->val);
-    // USLOSS_Console("Newest Priority %d\n", highestNode->next->val);
 
     if (highestNode->next->val != readyQueue->next->val) {
         Node *newNode;
@@ -468,8 +466,6 @@ P1Dispatch(int rotate)
             newNode->next = readyQueue->next;
             readyQueue->next = newNode;
         }
-        // printQueue();
-        // USLOSS_Console("3 switching, process = %d\n",highestNode->next->val);
         processTable[newNode->val].state = P1_STATE_RUNNING;
         int ret = P1ContextSwitch(processTable[newNode->val].cid);
         if (ret != P1_SUCCESS) {
