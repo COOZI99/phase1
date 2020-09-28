@@ -261,10 +261,6 @@ void
 P1_Quit(int status) 
 {
     checkInKernelMode();  // check for kernel mode
-    int endTime;
-    int clockStatus = USLOSS_DeviceInput(USLOSS_CLOCK_DEV, 0, &(endTime));
-    assert(clockStatus == USLOSS_DEV_READY);
-    processTable[readyQueue->next->val].cpuTime = (endTime - processTable[readyQueue->next->val].startTime);
     int enabled = P1DisableInterrupts(); // disable interrupts
 
 
