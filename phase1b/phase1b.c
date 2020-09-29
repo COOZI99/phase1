@@ -1,6 +1,23 @@
-/*
-Phase 1b
-*/
+/**
+ *  Authors: Bianca Lara, Ann Chang
+ *  Due Date: September 30th, 2020
+ *  Phase 1b
+ *  Submission Type: Group
+ *  Comments: The phase 1b implementation of phase 1. Implements the 
+ *  outlined functions for setting, getting, and quitting processes, 
+ *  as well as forking and getting the info of processes. The PCB struct
+ *  had 11 variables added to it: 
+ *      int     (*func)(void *)     The function the process calls
+ *      int      parentPid;         The process ID of the parent
+ *      Node     *childrenPids;     The children process IDs of the process
+ *      Node     *quitChildren;     The children that quitted
+ *      int      numChildren;       The total number of children
+ *      int      numQuit;           The number of children who have quit
+ *      int      sid;               The semaphore on which it is blocked
+ *      int      status;            If the process has quit or not
+ *      int      startTime;         The state time of process, used for cpuTime
+ *      Node     *lastChildNode;    The pointer to the last child node
+ */
 
 #include "phase1Int.h"
 #include "usloss.h"
@@ -29,7 +46,7 @@ typedef struct PCB {
     P1_State        state;              // state of the PCB
     int             tag;
     // more fields here
-    int             (*func)(void *);
+    int             (*func)(void *);    
     void            *arg;
     int             parentPid;          // The process ID of the parent
     Node            *childrenPids;      // The children process IDs of the process
@@ -75,8 +92,12 @@ static void reEnableInterrupts(int enabled) {
     }
 }
 
+/*
+ * Helper function to add the new process pid to the readyQueue
+ */
 static void enqueue(int pid){
     if(pid == 0){
+        // The first element inside the readyQueue
         readyQueue = (Node*)malloc(sizeof(Node)); 
         readyQueue->val = pid;
         readyQueue->next = readyQueue;
@@ -89,6 +110,10 @@ static void enqueue(int pid){
     }
 }
 
+/*
+ * Helper function to add the new child process pid to the current
+ * running process's child linked list
+ */
 static void add_child(int pid){
     int currentpid = readyQueue->next->val;
     Node *new_child = (Node*)malloc(sizeof(Node)); 
@@ -96,6 +121,7 @@ static void add_child(int pid){
     new_child->next = NULL;
     Node *head = processTable[readyQueue->next->val].childrenPids;
     Node *tail = processTable[readyQueue->next->val].lastChildNode;
+    // Setting 
     if(head == NULL){
         processTable[readyQueue->next->val].childrenPids = new_child;
         processTable[readyQueue->next->val].lastChildNode = new_child;
@@ -106,15 +132,15 @@ static void add_child(int pid){
     processTable[currentpid].numChildren++;
 }
 
+/*
+ * Helper function to free the child that has quitted. This
+ * function is only called by getChildStatus. It would free the 
+ * process and set the state to P1_STATE_FREE. 
+ */
 void free_procress(int pid){
-    Node *headC = processTable[pid].childrenPids;
+    // Node *headC = processTable[pid].childrenPids;
     int val = P1ContextFree(processTable[pid].cid);
     assert(val == P1_SUCCESS);
-    while(headC != NULL){
-        Node *temp = headC;
-        headC = headC->next;
-        free(temp);
-    }
 
     Node *headQ = processTable[pid].quitChildren;
     while(headQ != NULL){
@@ -125,6 +151,11 @@ void free_procress(int pid){
     processTable[pid].state = P1_STATE_FREE;
 }
 
+/*
+ * Helper function to remove the child node from the children list of 
+ * the parent's linked list. The parent would also inherit all the children
+ * of the quitting child. 
+ */
 void remove_child(int parent, int child){
     Node *headChildren = processTable[parent].childrenPids;
 
@@ -322,18 +353,22 @@ P1GetChildStatus(int tag, int *pid, int *status)
         return P1_INVALID_TAG;
     }
 
+    // checking if it has children
     if(processTable[readyQueue->next->val].childrenPids == NULL){
         return P1_NO_CHILDREN;
     }
 
+    // check if parent is blocked
     if(processTable[readyQueue->next->val].state == P1_STATE_BLOCKED){
-        P1Dispatch(TRUE);
+        P1_Quit(1);
     }
 
     Node *childll = processTable[readyQueue->next->val].quitChildren;
     if(childll == NULL){
         return P1_NO_QUIT;
     }else{
+        // going through the children list to see if there is a child that 
+        // has quitted and has the same tag that is passed in
         while(childll != NULL){
             if(processTable[childll->val].tag == tag){
                 *pid = childll->val;
@@ -382,23 +417,24 @@ void
 P1Dispatch(int rotate)
 {
     if (processTable[readyQueue->next->val].startTime == 0) {
-        USLOSS_Console("start time 0\n");
         clockStatus = USLOSS_DeviceInput(USLOSS_CLOCK_DEV, 0, &(processTable[readyQueue->next->val].startTime));
     } else {
-        USLOSS_Console("start time not 0\n");
         int endTime;
         clockStatus = USLOSS_DeviceInput(USLOSS_CLOCK_DEV, 0, &(endTime));
-        processTable[readyQueue->next->val].cpuTime += (endTime - processTable[readyQueue->next->val].startTime);
+        processTable[readyQueue->next->val].cpuTime += (endTime - processTable[readyQueue->next->val].startTime-1);
         processTable[readyQueue->next->val].startTime = 0;
     }
 
     int startTime;
-    
-    processTable[readyQueue->next->val].state = P1_STATE_READY;
+    if (processTable[readyQueue->next->val].state != P1_STATE_BLOCKED) {
+        processTable[readyQueue->next->val].state = P1_STATE_READY;
+    }
 
     if (readyQueue->next == readyQueue) {
         // Only one process ready
-        processTable[readyQueue->val].state = P1_STATE_RUNNING;
+        if (processTable[readyQueue->next->val].state != P1_STATE_BLOCKED) {
+            processTable[readyQueue->next->val].state = P1_STATE_RUNNING;
+        }
         clockStatus = USLOSS_DeviceInput(USLOSS_CLOCK_DEV, 0, &startTime);
         processTable[readyQueue->next->val].startTime = startTime;
         int ret = P1ContextSwitch(processTable[readyQueue->val].cid);
@@ -429,7 +465,9 @@ P1Dispatch(int rotate)
             newNode->next = readyQueue->next;
             readyQueue->next = newNode;
         }
-        processTable[newNode->val].state = P1_STATE_RUNNING;
+        if (processTable[readyQueue->next->val].state != P1_STATE_BLOCKED) {
+            processTable[readyQueue->next->val].state = P1_STATE_RUNNING;
+        }
         clockStatus = USLOSS_DeviceInput(USLOSS_CLOCK_DEV, 0, &startTime);
         processTable[readyQueue->next->val].startTime = startTime;
         int ret = P1ContextSwitch(processTable[newNode->val].cid);
@@ -448,7 +486,9 @@ P1Dispatch(int rotate)
                 ptr->next = ptr->next->next;
                 newNode->next = readyQueue->next;
                 readyQueue->next = newNode;
-                processTable[newNode->val].state = P1_STATE_RUNNING;
+                if (processTable[readyQueue->next->val].state != P1_STATE_BLOCKED) {
+                    processTable[readyQueue->next->val].state = P1_STATE_RUNNING;
+                }
                 clockStatus = USLOSS_DeviceInput(USLOSS_CLOCK_DEV, 0, &startTime);
                 processTable[readyQueue->next->val].startTime = startTime;
                 int ret = P1ContextSwitch(processTable[newNode->val].cid);
@@ -462,19 +502,22 @@ P1Dispatch(int rotate)
         // No same priority found, returning current node to head of ready queue
         readyQueue = ptr;
     } else {
-        processTable[readyQueue->next->val].state = P1_STATE_RUNNING;
+        if (processTable[readyQueue->next->val].state != P1_STATE_BLOCKED) {
+            processTable[readyQueue->next->val].state = P1_STATE_RUNNING;
+        }
         clockStatus = USLOSS_DeviceInput(USLOSS_CLOCK_DEV, 0, &startTime);
         processTable[readyQueue->next->val].startTime = startTime;
         int ret = P1ContextSwitch(processTable[readyQueue->next->val].cid);
         assert(ret == 0);
-    }
-    
+    }  
 }
 
 int
 P1_GetProcInfo(int pid, P1_ProcInfo *info)
 {
     int         result = P1_SUCCESS;
+
+    // checking if pid is valid
     if (pid < 0 || P1_MAXPROC <= pid || processTable[pid].state == P1_STATE_FREE) {
         return P1_INVALID_PID;
     }
@@ -488,6 +531,7 @@ P1_GetProcInfo(int pid, P1_ProcInfo *info)
     info->numChildren = processTable[pid].numChildren;
     int i;
     Node *head = processTable[pid].childrenPids;
+    // adding all children of the process
     for(i = 0; i < processTable[pid].numChildren; i++){
         info->children[i] = head->val;
         head = head->next;
