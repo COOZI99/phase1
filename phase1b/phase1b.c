@@ -357,8 +357,11 @@ P1GetChildStatus(int tag, int *pid, int *status)
     if(processTable[readyQueue->next->val].childrenPids == NULL){
         return P1_NO_CHILDREN;
     }
+<<<<<<< HEAD
 
     // check if parent is blocked
+=======
+>>>>>>> fe268527d56d36485239d804efc4d79fde92711c
     if(processTable[readyQueue->next->val].state == P1_STATE_BLOCKED){
         P1_Quit(1);
     }
