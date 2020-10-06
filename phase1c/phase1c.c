@@ -7,14 +7,34 @@
 #include "usloss.h"
 #include "phase1Int.h"
 
+static void checkInKernelMode();
+
 typedef struct Sem
 {
     char        name[P1_MAXNAME+1];
     u_int       value;
     // more fields here
+    int         blocked;
 } Sem;
 
 static Sem sems[P1_MAXSEM];
+
+static void IllegalMessage(int n, void *arg){
+    P1_Quit(1024);
+}
+
+static void checkInKernelMode() {
+    if(!(USLOSS_PsrGet() & USLOSS_PSR_CURRENT_MODE)){
+        USLOSS_IntVec[USLOSS_ILLEGAL_INT] = IllegalMessage;
+        USLOSS_IllegalInstruction();
+    }
+}
+
+static void reEnableInterrupts(int enabled) {
+    if (enabled == TRUE) {
+        P1EnableInterrupts();
+    }
+}
 
 void 
 P1SemInit(void) 
@@ -40,7 +60,14 @@ int P1_SemCreate(char *name, unsigned int value, int *sid)
 int P1_SemFree(int sid) 
 {
     int     result = P1_SUCCESS;
-    // more code here
+    if( sid > P1_MAXSEM || sid < 0){
+        result = P1_INVALID_SID;
+    }else if(sems[sid].blocked){
+        result = P1_BLOCKED_PROCESSES;
+    }else{
+
+    }
+
     return result;
 }
 
@@ -59,18 +86,25 @@ int P1_P(int sid)
 int P1_V(int sid) 
 {
     int result = P1_SUCCESS;
-    // check for kernel mode
-    // disable interrupts
+    checkInKernelMode();                    // check for kernel mode
+    int enabled = P1DisableInterrupts();    // disable interrupts
     // value++
     // if a process is waiting for this semaphore
     //      set the process's state to P1_STATE_READY
-    // re-enable interrupts if they were previously enabled
+    reEnableInterrupts(enabled);            // re-enable interrupts if they were previously enabled
     return result;
 }
 
 int P1_SemName(int sid, char *name) {
     int result = P1_SUCCESS;
-    // more code here
+
+    if( sid > P1_MAXSEM || sid < 0){
+        result = P1_INVALID_SID;
+    }else if(sems[sid].name == NULL){
+        result = P1_NAME_IS_NULL;
+    }else{
+        strcpy(name,sems[sid].name);
+    }
     return result;
 }
 
