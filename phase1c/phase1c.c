@@ -108,8 +108,10 @@ int P1_P(int sid)
     int enabled = P1DisableInterrupts(); // disable interrupts
     while (sem[sid].value == 0) {
         P1SetState(P1_GetPid(), P1_STATE_BLOCKED, sid);
+        sem[sid].blocked = TRUE;
     }
     sem[sid].value--;
+    semd[sid].blocked = FALSE;
     reEnableInterrupts(enabled);
     return result;
 }
