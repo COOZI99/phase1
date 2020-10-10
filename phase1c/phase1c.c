@@ -7,12 +7,15 @@
 #include "usloss.h"
 #include "phase1Int.h"
 
+static void checkInKernelMode();
+
 typedef struct Sem
 {
     char        name[P1_MAXNAME+1];
     u_int       value;
     // more fields here
     int         notFreed;
+    int         blocked;
 } Sem;
 
 static Sem sems[P1_MAXSEM];
@@ -21,7 +24,7 @@ static Sem sems[P1_MAXSEM];
 // Helper Functions
 ///////////////////////////////////////////////////////////////////////////////
 static void IllegalMessage(int n, void *arg){
-    USLOSS_Halt(0);
+    P1_Quit(1024);
 }
 
 static void checkInKernelMode() {
@@ -31,7 +34,7 @@ static void checkInKernelMode() {
     }
 }
 
-static void reenableInterrupts(int enabled) {
+static void reEnableInterrupts(int enabled) {
     if (enabled == TRUE) {
         P1EnableInterrupts();
     }
@@ -67,7 +70,7 @@ int P1_SemCreate(char *name, unsigned int value, int *sid)
     int i;
     for (i=0; i<P1_MAXSEM; i++) {
         if (sems[i].notFreed == TRUE && strcmp(sems[i].name, name) == 0) {
-            reenableInterrupts(enabled);
+            reEnableInterrupts(enabled);
             return P1_DUPLICATE_NAME;
         }
         // find a free Sem and initialize it
@@ -80,14 +83,21 @@ int P1_SemCreate(char *name, unsigned int value, int *sid)
         }
     }  
     // re-enable interrupts if they were previously enabled
-    reenableInterrupts(enabled);
+    reEnableInterrupts(enabled);
     return P1_TOO_MANY_SEMS;
 }
 
 int P1_SemFree(int sid) 
 {
     int     result = P1_SUCCESS;
-    // more code here
+    if( sid > P1_MAXSEM || sid < 0){
+        result = P1_INVALID_SID;
+    }else if(sems[sid].blocked){
+        result = P1_BLOCKED_PROCESSES;
+    }else{
+
+    }
+
     return result;
 }
 
@@ -100,25 +110,32 @@ int P1_P(int sid)
         P1SetState(P1_GetPid(), P1_STATE_BLOCKED, sid);
     }
     sem[sid].value--;
-    reenableInterrupts(enabled);
+    reEnableInterrupts(enabled);
     return result;
 }
 
 int P1_V(int sid) 
 {
     int result = P1_SUCCESS;
-    // check for kernel mode
-    // disable interrupts
+    checkInKernelMode();                    // check for kernel mode
+    int enabled = P1DisableInterrupts();    // disable interrupts
     // value++
     // if a process is waiting for this semaphore
     //      set the process's state to P1_STATE_READY
-    // re-enable interrupts if they were previously enabled
+    reEnableInterrupts(enabled);            // re-enable interrupts if they were previously enabled
     return result;
 }
 
 int P1_SemName(int sid, char *name) {
     int result = P1_SUCCESS;
-    // more code here
+
+    if( sid > P1_MAXSEM || sid < 0){
+        result = P1_INVALID_SID;
+    }else if(sems[sid].name == NULL){
+        result = P1_NAME_IS_NULL;
+    }else{
+        strcpy(name,sems[sid].name);
+    }
     return result;
 }
 

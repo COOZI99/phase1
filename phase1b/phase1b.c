@@ -142,12 +142,12 @@ void free_procress(int pid){
     int val = P1ContextFree(processTable[pid].cid);
     assert(val == P1_SUCCESS);
 
-    Node *headQ = processTable[pid].quitChildren;
-    while(headQ != NULL){
-        Node *temp = headQ;
-        headQ = headQ->next;
-        free(temp);
-    }
+    // Node *headQ = processTable[pid].quitChildren;
+    // while(headQ != NULL){
+    //     Node *temp = headQ;
+    //     headQ = headQ->next;
+    //     free(temp);
+    // }
     processTable[pid].state = P1_STATE_FREE;
 }
 
@@ -157,11 +157,11 @@ void free_procress(int pid){
  * of the quitting child. 
  */
 void remove_child(int parent, int child){
-    Node *headChildren = processTable[parent].childrenPids;
+    Node *headChildren = processTable[0].childrenPids;
 
     if(headChildren->val == child){
-        Node *temp = processTable[parent].childrenPids;
-        processTable[parent].childrenPids = processTable[parent].childrenPids->next;
+        Node *temp = processTable[0].childrenPids;
+        processTable[parent].childrenPids = processTable[0].childrenPids->next;
         free(temp);
     }else{
         while(headChildren != NULL && headChildren->next != NULL){
@@ -172,7 +172,6 @@ void remove_child(int parent, int child){
             headChildren = headChildren->next;
         }
     }
-
     Node *headQuit = processTable[parent].quitChildren;
 
     if(headQuit->val == child){
@@ -181,7 +180,7 @@ void remove_child(int parent, int child){
         free(temp);
     }else{
         while(headQuit != NULL && headQuit->next != NULL){
-            if(headChildren->next->val == child){
+            if(headQuit->next->val == child){
                 headQuit->next = headQuit->next->next;
                 break;
             }
