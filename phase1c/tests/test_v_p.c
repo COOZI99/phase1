@@ -1,6 +1,10 @@
+/*
+ * Tests V on semaphore before P.
+ */
 #include <phase1.h>
 #include <phase1Int.h>
 #include <assert.h>
+#include "tester.h"
 
 static int flag = 0;
 
@@ -13,7 +17,7 @@ Unblocks(void *arg)
     flag = 1;
     USLOSS_Console("V on semaphore.\n");
     rc = P1_V(sem);
-    assert(rc == P1_SUCCESS);
+    TEST(rc, P1_SUCCESS);
     return 12;
 }
 
@@ -26,12 +30,12 @@ Blocks(void *arg)
 
     rc = P1_Fork("Unblocks", Unblocks, (void *) sem, USLOSS_MIN_STACK, 1, 0, &pid);
     assert(rc == P1_SUCCESS);
+
     USLOSS_Console("P on semaphore.\n");
     rc = P1_P(sem);
-    assert(rc == P1_SUCCESS);
-    assert(flag == 1);
-    USLOSS_Console("Test passed.\n");
-    USLOSS_Halt(0);
+    TEST(rc, P1_SUCCESS);
+    TEST(flag, 1);
+    PASSED();
     // should not return
     assert(0);
     return 0;
@@ -47,7 +51,7 @@ startup(int argc, char **argv)
 
     P1SemInit();
     rc = P1_SemCreate("sem", 0, &sem);
-    assert(rc == P1_SUCCESS);
+    TEST(rc, P1_SUCCESS);
     // Unblocks V's semaphore before Block P's
     rc = P1_Fork("Blocks", Blocks, (void *) sem, USLOSS_MIN_STACK, 2, 0, &pid);
     assert(rc == P1_SUCCESS);

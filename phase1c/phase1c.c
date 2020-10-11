@@ -58,13 +58,13 @@ P1SemInit(void)
 
 int P1_SemCreate(char *name, unsigned int value, int *sid)
 {
-    checkInKernelMode()                 // check for kernel mode
+    checkInKernelMode();                    // check for kernel mode
     int enabled = P1DisableInterrupts();    // disable interrupts
     // check parameters
     if (name == NULL) {
         return P1_NAME_IS_NULL;
     }
-    if (sizeof(name) > P1_MAXNAME) {
+    if (strlen(name) > P1_MAXNAME) {
         return P1_NAME_TOO_LONG;
     }
     int i;
@@ -77,7 +77,7 @@ int P1_SemCreate(char *name, unsigned int value, int *sid)
         if (sems[i].notFreed == FALSE) {
             *sid = i;
             sems[i].notFreed = TRUE;
-            sems[i].name = name;
+            strcpy(sems[i].name, name);
             sems[i].value = value;
             reEnableInterrupts(enabled);
             return P1_SUCCESS;
@@ -106,17 +106,18 @@ int P1_P(int sid)
 {
     int result = P1_SUCCESS;
     checkInKernelMode();             // check for kernel mode
-    if (sid < 0 || sid > P1_MAXSEM || sem[sid].notFreed == FALSE) {
+    if (sid < 0 || sid > P1_MAXSEM || sems[sid].notFreed == FALSE) {
         return P1_INVALID_SID;
     }
     int enabled = P1DisableInterrupts(); // disable interrupts
 
-    while (sem[sid].value == 0) {
-        P1SetState(P1_GetPid(), P1_STATE_BLOCKED, sid);
-        sem[sid].blocked = TRUE;
+    while (sems[sid].value == 0) {
+        int val = P1SetState(P1_GetPid(), P1_STATE_BLOCKED, sid);
+        assert(val == P1_SUCCESS);
+        sems[sid].blocked = TRUE;
     }
-    sem[sid].value--;
-    semd[sid].blocked = FALSE;
+    sems[sid].value--;
+    sems[sid].blocked = FALSE;
     reEnableInterrupts(enabled);
     return result;
 }
