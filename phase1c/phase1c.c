@@ -96,7 +96,7 @@ int P1_SemFree(int sid)
     }else if(sems[sid].blocked){
         result = P1_BLOCKED_PROCESSES;
     }else{
-
+        sems[sid].notFreed = FALSE;
     }
 
     return result;
@@ -106,18 +106,20 @@ int P1_P(int sid)
 {
     int result = P1_SUCCESS;
     checkInKernelMode();             // check for kernel mode
-    if (sid < 0 || sid > P1_MAXSEM || sems[sid].notFreed == FALSE) {
+    if (sid < 0 || sid >= P1_MAXSEM || sems[sid].notFreed == FALSE) {
         return P1_INVALID_SID;
     }
     int enabled = P1DisableInterrupts(); // disable interrupts
 
-    while (sems[sid].value == 0) {
+    if (sems[sid].value <= 0) {
         int val = P1SetState(P1_GetPid(), P1_STATE_BLOCKED, sid);
         assert(val == P1_SUCCESS);
         sems[sid].blocked = TRUE;
+        P1Dispatch(FALSE);
+    } else {
+        sems[sid].blocked = FALSE;
     }
     sems[sid].value--;
-    sems[sid].blocked = FALSE;
     reEnableInterrupts(enabled);
     return result;
 }
