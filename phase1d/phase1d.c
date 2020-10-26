@@ -39,7 +39,7 @@ static int checkTypeUnit(int type, int unit){
     if((type == USLOSS_CLOCK_INT || type == USLOSS_ALARM_INT) && unit != 0){
         return P1_INVALID_UNIT;
     }
-    if(type == USLOSS_DISK_UNIT && (unit < 0 || unit > 1)){
+    if(type == USLOSS_DISK_INT && (unit < 0 || unit > 1)){
         return P1_INVALID_UNIT;
     }
     if (unit < 0 || unit >= USLOSS_MAX_UNITS){
@@ -67,17 +67,18 @@ startup(int argc, char **argv)
 
     // initialize device data structures
     int i, j;
-    int count = 0;
     for( i = 0; i < 4; i ++){
         for( j = 0; j < USLOSS_MAX_UNITS; j++){
             int semID;
             static char name[P1_MAXNAME + 1];
-            snprintf(name,sizeof(name), "%s%d","Sem",count);
+            int num = i * 10 + j;
+            snprintf(name,sizeof(name), "%s%d","Sem",num);
             int val = P1_SemCreate(name,0,&semID);
             assert(val == P1_SUCCESS);
             array[i][j].sid = semID;
             array[i][j].status = -1;
             array[i][j].abort = 0;
+
         }
     }
     // put device interrupt handlers into interrupt vector
@@ -186,7 +187,7 @@ sentinel (void *notused)
     P1EnableInterrupts();
     // while sentinel has children
     int status;
-    while (P1GetChildStatus(0, pid, &status) == P1_SUCCESS) {
+    while (P1GetChildStatus(0, &pid, &status) == P1_SUCCESS) {
         USLOSS_WaitInt();
     }
     //      get children that have quit via P1GetChildStatus (either tag)
