@@ -1,3 +1,15 @@
+/**
+ *  Authors: Bianca Lara, Ann Chang
+ *  Due Date: October 28th, 2020
+ *  Phase 1d
+ *  Submission Type: Group
+ *  Comments: The phase 1d implementation of phase 1. Implements the 
+ *  interrupt handlers for device, boots the entire Phase 1.
+ *  The Device struct had 3 variables added to it:
+ *      int     abort   if device needs to abort
+ *      int     sid     semaphore for device
+ *      int     status  
+ */
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,6 +37,9 @@ typedef struct Device
 static Device array[4][USLOSS_MAX_UNITS];
 static int calls = 0;
 
+///////////////////////////////////////////////////////////////////////////////
+// Helper Functions
+///////////////////////////////////////////////////////////////////////////////
 static void IllegalMessage(int n, void *arg){
     P1_Quit(1024);
 }
@@ -36,6 +51,15 @@ static void checkInKernelMode() {
     }
 }
 
+static void reEnableInterrupts(int enabled) {
+    if (enabled == TRUE) {
+        P1EnableInterrupts();
+    }
+}
+
+/*
+ * checking if type and unit is valid
+ */
 static int checkTypeUnit(int type, int unit){
     if((type == USLOSS_CLOCK_INT || type == USLOSS_ALARM_INT) && unit != 0){
         return P1_INVALID_UNIT;
@@ -52,12 +76,9 @@ static int checkTypeUnit(int type, int unit){
     return P1_SUCCESS;
 }
 
-
-static void reEnableInterrupts(int enabled) {
-    if (enabled == TRUE) {
-        P1EnableInterrupts();
-    }
-}
+///////////////////////////////////////////////////////////////////////////////
+// End of Helper Functions
+///////////////////////////////////////////////////////////////////////////////
 
 void 
 startup(int argc, char **argv)
