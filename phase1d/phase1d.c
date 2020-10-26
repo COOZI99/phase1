@@ -23,6 +23,7 @@ typedef struct Device
 
 // Defining 2d array for devices
 static Device array[4][USLOSS_MAX_UNITS];
+static int calls = 0;
 
 static void IllegalMessage(int n, void *arg){
     P1_Quit(1024);
@@ -62,23 +63,23 @@ void
 startup(int argc, char **argv)
 {
     checkInKernelMode();
-    int pid;
     P1SemInit();
 
-    // initialize device data structures
+    int pid;
     int i, j;
+    int count = 0;
+    // initialize device data structures 
     for( i = 0; i < 4; i ++){
         for( j = 0; j < USLOSS_MAX_UNITS; j++){
             int semID;
             static char name[P1_MAXNAME + 1];
-            int num = i * 10 + j;
-            snprintf(name,sizeof(name), "%s%d","Sem",num);
+            snprintf(name,sizeof(name), "%s%d","Sem",count);
             int val = P1_SemCreate(name,0,&semID);
             assert(val == P1_SUCCESS);
             array[i][j].sid = semID;
             array[i][j].status = -1;
             array[i][j].abort = 0;
-
+            count ++;
         }
     }
     // put device interrupt handlers into interrupt vector
@@ -152,7 +153,7 @@ static void
 DeviceHandler(int type, void *arg) 
 {
     int unit = (int)arg;
-    static int calls = 0;
+
     // if clock device
     //      P1_WakeupDevice every 5 ticks
     //      P1Dispatch(TRUE) every 4 ticks
@@ -176,53 +177,75 @@ DeviceHandler(int type, void *arg)
 static int
 sentinel (void *notused)
 {
-    int     pid;
-    int     rc;
-
+int pid;
+    int currPid = P1_GetPid();
+    int rc;
+    int status;
     /* start the P2_Startup process */
-    rc = P1_Fork("P2_Startup", P2_Startup, NULL, 4 * USLOSS_MIN_STACK, 2 , 0, &pid);
+    rc = P1_Fork("P2_Startup", P2_Startup, NULL, 4 * USLOSS_MIN_STACK, 2, 0, &pid);
     assert(rc == P1_SUCCESS);
 
-    // enable interrupts
     P1EnableInterrupts();
+
     // while sentinel has children
-    int status;
-    while (P1GetChildStatus(0, &pid, &status) == P1_SUCCESS) {
-        USLOSS_WaitInt();
-    }
     //      get children that have quit via P1GetChildStatus (either tag)
     //      wait for an interrupt via USLOSS_WaitInt
+    P1_ProcInfo process;
+    rc = P1_GetProcInfo(currPid, &process);
+    while (process.numChildren > 0) {   
+        int tag1, tag2;
+        // Removing all the child tags
+        do{
+            tag1 = (P1GetChildStatus(0, &pid, &status) == P1_SUCCESS);
+            tag2 = (P1GetChildStatus(1, &pid, &status) == P1_SUCCESS);
+        }while(tag1 == 1 || tag2 == 1);
+        
+        USLOSS_WaitInt();
+        rc = P1_GetProcInfo(currPid, &process);
+    }
+
     USLOSS_Console("Sentinel quitting.\n");
     return 0;
+   
 } /* End of sentinel */
 
 int 
 P1_Join(int tag, int *pid, int *status) 
 {
+     // kernel mode
     checkInKernelMode();
     int result = P1_SUCCESS;
+    int childPid;
     // disable interrupts
-    int enabled = P1DisableInterrupts();
-    // kernel mode
-    // do
-    //     use P1GetChildStatus to get a child that has quit
-    int rc = P1GetChildStatus(tag, pid, status);  
-    if (rc == P1_NO_CHILDREN) {
-        return P1_NO_CHILDREN;
-    }
+    int rc = P1DisableInterrupts();
+    rc = P1GetChildStatus(tag, pid, status);  
+
+    // validate tag
     if (rc == P1_INVALID_TAG) {
         return P1_INVALID_TAG;
     }
-    if (rc == P1_NO_QUIT) {
-        assert(P1SetState(P1_GetPid(), P1_STATE_JOINING, 0) == P1_SUCCESS);
-        P1Dispatch(FALSE);
+    // check if theres children
+    if(rc == P1_NO_CHILDREN){
+        return P1_NO_CHILDREN;
     }
+
+    if(rc == P1_NO_QUIT){
+        // Representing process
+        P1_ProcInfo process;
+        // do
+        //     use P1GetChildStatus to get a child that has quit  
+        //     if no children have quit
+        // until either a child quit or there are no more children
+        int val = P1_GetProcInfo(P1_GetPid(),&process);
+        while(rc != P1_SUCCESS && process.numChildren > 0){
+            val = P1SetState(P1_GetPid(),P1_STATE_JOINING,process.sid);
+            val = P1_GetProcInfo(P1_GetPid(),&process);
+            P1Dispatch(FALSE);
+            rc = P1GetChildStatus(tag,&childPid,status);
+        }
     
-    reEnableInterrupts(enabled);
-    //     if no children have quit
-    //        set state to P1_STATE_JOINING vi P1SetState
-    //        P1Dispatch(FALSE)
-    // until either a child quit or there are no more children
+    }
+    *pid = childPid;
     return result;
 }
 
